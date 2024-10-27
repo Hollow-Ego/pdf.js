@@ -400,8 +400,14 @@ class Toolbar {
     // #2459 / #367 modified by ngx-extended-pdf-viewer
     const minScale = Number(this.minZoom) ?? MIN_SCALE;
     const maxScale = Number(this.maxZoom) ?? MAX_SCALE;
-    opts.zoomOut.disabled = pageScale <= minScale;
-    opts.zoomIn.disabled = pageScale >= maxScale;
+    // #2593 modified by ngx-extended-pdf-viewer
+    if (opts.zoomOut) {
+      opts.zoomOut.disabled = pageScale <= minScale;
+    }
+    if (opts.zoomIn) {
+      opts.zoomIn.disabled = pageScale >= maxScale;
+    }
+    // #2593 end of modification by ngx-extended-pdf-viewer
     // #2459 / #367 end of modification by ngx-extended-pdf-viewer
 
     let predefinedValueFound = false;

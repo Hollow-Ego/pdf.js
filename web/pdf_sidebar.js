@@ -339,9 +339,12 @@ class PDFSidebar {
       }
     });
 
-    this.toggleButton.addEventListener("click", evt => {
-      this.toggle(evt);
-    });
+    // #2593 modified by ngx-extended-pdf-viewer
+    // the toggle button is already handled by the TypeScript code
+    // this.toggleButton.addEventListener("click", evt => {
+    //  this.toggle(evt);
+    // });
+    // #2593 end of modification by ngx-extended-pdf-viewer
 
     // Buttons for switching views.
     this.thumbnailButton.addEventListener("click", () => {
