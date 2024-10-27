@@ -52,9 +52,11 @@ class PDFFindBar {
     this.#mainContainer = mainContainer;
 
     // Add event listeners to the DOM elements.
-    this.toggleButton.addEventListener("click", () => {
-      this.toggle();
-    });
+    // #2593 modified by ngx-extended-pdf-viewer
+    // this.toggleButton.addEventListener("click", () => {
+    //  this.toggle();
+    // });
+    // #2593 end of modification by ngx-extended-pdf-viewer
 
     this.findField.addEventListener("input", () => {
       this.dispatchEvent("");
