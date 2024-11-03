@@ -1114,7 +1114,11 @@ class WidgetAnnotationElement extends AnnotationElement {
       // Non-mouse events
       element.addEventListener(baseName, event => {
         if (baseName === "blur") {
-          if (!elementData.focused || !event.relatedTarget) {
+          // #2545 modified by ngx-extended-pdf-viewer
+          // In ngx-extended-pdf-viewer, the canvas doesn't have a tab index, so
+          // event.relatedTarget is always null.
+          if (!elementData.focused /* || !event.relatedTarget */) {
+          // #2545 end of modification by ngx-extended-pdf-viewer
             return;
           }
           elementData.focused = false;
@@ -1498,7 +1502,11 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
         const _blurListener = blurListener;
         blurListener = null;
         element.addEventListener("blur", event => {
-          if (!elementData.focused || !event.relatedTarget) {
+          // #2545 modified by ngx-extended-pdf-viewer
+          // In ngx-extended-pdf-viewer, the canvas doesn't have a tab index, so
+          // event.relatedTarget is always null.
+          if (!elementData.focused /* || !event.relatedTarget */) {
+            // #2545 end of modification by ngx-extended-pdf-viewer
             return;
           }
           if (!this.data.actions?.Blur) {
