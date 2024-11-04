@@ -58,7 +58,9 @@ class InkEditor extends AnnotationEditor {
 
   #baseWidth = 0;
 
-  #boundCanvasTouchMove = null;
+  // #2527 modified by ngx-extended-pdf-viewer
+  #boundCanvasTouchMove = this.canvasTouchMove.bind(this);
+  // #2527 end of modification by ngx-extended-pdf-viewer
 
   #canvasContextMenuTimeoutId = null;
 
@@ -122,6 +124,9 @@ class InkEditor extends AnnotationEditor {
   /** @inheritdoc */
   static initialize(l10n, uiManager) {
     AnnotationEditor.initialize(l10n, uiManager);
+    // #2527 modified by ngx-extended-pdf-viewer
+    setTimeout(() => this.initializePointerType());
+    // #2527 end of modification by ngx-extended-pdf-viewer
   }
 
   /** @inheritdoc */
