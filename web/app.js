@@ -1154,6 +1154,7 @@ const PDFViewerApplication = {
     }
     // #2480 end of modification by ngx-extended-pdf-viewer
     Object.assign(GlobalWorkerOptions, workerParams);
+    workerParams.port = workerParams.port ?? GlobalWorkerOptions.workerPort; // #2540 modified by ngx-extended-pdf-viewer
     // #2480 modified by ngx-extended-pdf-viewer
     if (this.pdfWorker === null) {
       this.pdfWorker = workerParams.port ? PDFWorker.fromPort(workerParams) : new PDFWorker(workerParams);
