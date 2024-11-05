@@ -124,9 +124,6 @@ class InkEditor extends AnnotationEditor {
   /** @inheritdoc */
   static initialize(l10n, uiManager) {
     AnnotationEditor.initialize(l10n, uiManager);
-    // #2527 modified by ngx-extended-pdf-viewer
-    setTimeout(() => this.initializePointerType());
-    // #2527 end of modification by ngx-extended-pdf-viewer
   }
 
   /** @inheritdoc */
