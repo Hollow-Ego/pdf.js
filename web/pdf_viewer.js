@@ -665,7 +665,7 @@ class PDFViewer {
             renderAsynchronously = this.adjacentPagesRenderer(null, pageIndex);
           }
         } catch (exception) {
-          console.log("Exception during pre-rendering page %s", pageIndex, exception);
+          NgxConsole.log("Exception during pre-rendering page %s", pageIndex, exception);
         }
       }
     }
@@ -1016,7 +1016,7 @@ class PDFViewer {
           }
         })
         .catch(reason => {
-          console.warn(
+          NgxConsole.warn(
             `Something goes wrong when extracting the text: ${reason.message}`
           );
         })
@@ -1072,7 +1072,7 @@ class PDFViewer {
     // Given that browsers don't handle huge amounts of DOM-elements very well,
     // enforce usage of PAGE-scrolling when loading *very* long/large documents.
     if (pagesCount > PagesCountLimit.FORCE_SCROLL_MODE_PAGE) {
-      console.warn(
+      NgxConsole.warn(
         "Forcing PAGE-scrolling for performance reasons, given the length of the document."
       );
       const mode = (this._scrollMode = ScrollMode.PAGE);
@@ -1137,7 +1137,7 @@ class PDFViewer {
           const mode = annotationEditorMode;
 
           if (pdfDocument.isPureXfa) {
-            console.warn("Warning: XFA-editing is not implemented.");
+            NgxConsole.warn("Warning: XFA-editing is not implemented.");
           } else if (isValidAnnotationEditorMode(mode)) {
             this.#annotationEditorUIManager = new AnnotationEditorUIManager(
               this.container,
@@ -1163,7 +1163,7 @@ class PDFViewer {
               this.#annotationEditorUIManager.updateMode(mode);
             }
           } else {
-            console.error(`Invalid AnnotationEditor mode: ${mode}`);
+            NgxConsole.error(`Invalid AnnotationEditor mode: ${mode}`);
           }
         }
 
@@ -1302,7 +1302,7 @@ class PDFViewer {
                 }
               },
               reason => {
-                console.error(
+                NgxConsole.error(
                   `Unable to get page ${pageNum} to initialize viewer`,
                   reason
                 );
@@ -1805,7 +1805,7 @@ class PDFViewer {
     const pageView =
       Number.isInteger(pageNumber) && this._pages[pageNumber - 1];
     if (!pageView) {
-      console.error(
+      NgxConsole.error(
         `scrollPageIntoView: "${pageNumber}" is not a valid pageNumber parameter.`
       );
       return;
@@ -1894,7 +1894,7 @@ class PDFViewer {
         scale = Math.min(Math.abs(widthScale), Math.abs(heightScale));
         break;
       default:
-        console.error(
+        NgxConsole.error(
           `scrollPageIntoView: "${destArray[1].name}" is not a valid destination type.`
         );
         return;
@@ -2140,7 +2140,7 @@ class PDFViewer {
       }
       return pdfPage;
     } catch (reason) {
-      console.error("Unable to get page for page view", reason);
+      NgxConsole.error("Unable to get page for page view", reason);
       return null; // Page error -- there is nothing that can be done.
     }
   }
@@ -2239,7 +2239,7 @@ class PDFViewer {
       return Promise.resolve(null);
     }
     if (!this._optionalContentConfigPromise) {
-      console.error("optionalContentConfigPromise: Not initialized yet.");
+      NgxConsole.error("optionalContentConfigPromise: Not initialized yet.");
       // Prevent issues if the getter is accessed *before* the `onePageRendered`
       // promise has resolved; won't (normally) happen in the default viewer.
       return this.pdfDocument.getOptionalContentConfig({ intent: "display" });
@@ -2777,6 +2777,16 @@ class PDFViewer {
   }
 
   async addEditorAnnotation(data) {
+    try {
+      // #1783 modified by ngx-extended-pdf-viewer
+      if (typeof data === "string") {
+        data = JSON.parse(data);
+      }
+      // #1783 end of modification by ngx-extended-pdf-viewer
+    } catch (ex) {
+      NgxConsole.error(`Please pass a JSON string or an Array of JSON objects to addEditorAnnotation: "${ex.message}".`);
+      return;
+    }
     if (!Array.isArray(data)) {
       data = [data];
     }
