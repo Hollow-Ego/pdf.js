@@ -366,6 +366,7 @@ function getDocument(src = {}) {
     const workerParams = {
       verbosity,
       port: GlobalWorkerOptions.workerPort,
+      cspPolicyService: src.cspPolicyService, // #2362 modified by ngx-extended-pdf-viewer
     };
     // Worker was not provided -- creating and owning our own. If message port
     // is specified in global worker options, using it.
@@ -2094,6 +2095,7 @@ class PDFWorker {
     name = null,
     port = null,
     verbosity = getVerbosityLevel(),
+    cspPolicyService, // #2362 modified by ngx-extended-pdf-viewer
   } = {}) {
     this.name = name;
     this.destroyed = false;
@@ -2115,7 +2117,7 @@ class PDFWorker {
       this._initializeFromPort(port);
       return;
     }
-    this._initialize();
+    this._initialize(cspPolicyService); // #2362 modified by ngx-extended-pdf-viewer
   }
 
   /**
@@ -2171,20 +2173,7 @@ class PDFWorker {
     this.#resolve();
   }
 
-  // modified by ngx-extended-pdf-viewer #1512
-  #generateTrustedURL(sourcePath) {
-    if (window.trustedTypes) {
-      const sanitizer = window.trustedTypes.createPolicy("pdf-viewer", {
-        createHTML: input => input,
-        createScriptURL: input => input,
-      });
-      return sanitizer.createScriptURL(sourcePath);
-    }
-    return sourcePath;
-  }
-  // end of modification by ngx-extended-pdf-viewer #1512
-
-  _initialize() {
+  _initialize(cspPolicyService) { // #2362 modified by ngx-extended-pdf-viewer
     // If worker support isn't disabled explicit and the browser has worker
     // support, create a new web worker and test if it/the browser fulfills
     // all requirements to run parts of pdf.js in a web worker.
@@ -2213,7 +2202,7 @@ class PDFWorker {
       }
 
       // modified by ngx-extended-pdf-viewer #1512
-      const worker = new Worker(this.#generateTrustedURL(workerSrc), { type: "module" });
+      const worker = new Worker(cspPolicyService.generateTrustedURL(workerSrc), { type: "module" }); // #2362 modified by ngx-extended-pdf-viewer
       // end of modification by ngx-extended-pdf-viewer #1512
       const messageHandler = new MessageHandler("main", "worker", worker);
       const terminateEarly = () => {

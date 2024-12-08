@@ -192,6 +192,7 @@ const PDFViewerApplication = {
   // Called once when the document is loaded.
   async initialize(appConfig) {
     this.appConfig = appConfig;
+    this.cspPolicyService = appConfig.cspPolicyService; // #2362 modified by ngx-extended-pdf-viewer
 
     // Ensure that `Preferences`, and indirectly `AppOptions`, have initialized
     // before creating e.g. the various viewer components.
@@ -532,6 +533,7 @@ const PDFViewerApplication = {
       defaultCacheSize: AppOptions.get("defaultCacheSize"),
       minZoom: AppOptions.get("minZoom"),
       maxZoom: AppOptions.get("maxZoom"),
+      cspPolicyService: this.cspPolicyService, // #2362 modified by ngx-extended-pdf-viewer
     });
     this.pdfViewer = pdfViewer;
 
@@ -1146,6 +1148,7 @@ const PDFViewerApplication = {
     }
     // Set the necessary global worker parameters, using the available options.
     const workerParams = AppOptions.getAll(OptionKind.WORKER);
+    workerParams.cspPolicyService = args.cspPolicyService; // #2362 modified by ngx-extended-pdf-viewer
 
     // #2480 modified by ngx-extended-pdf-viewer
     if (args.workerSrc && (args.workerSrc !== workerParams.workerSrc)) {
@@ -1156,6 +1159,7 @@ const PDFViewerApplication = {
     Object.assign(GlobalWorkerOptions, workerParams);
     workerParams.port = workerParams.port ?? GlobalWorkerOptions.workerPort; // #2540 modified by ngx-extended-pdf-viewer
     // #2480 modified by ngx-extended-pdf-viewer
+    workerParams.cspPolicyService = this.cspPolicyService; // #2362 modified by ngx-extended-pdf-viewer
     if (this.pdfWorker === null) {
       this.pdfWorker = workerParams.port ? PDFWorker.fromPort(workerParams) : new PDFWorker(workerParams);
     }
@@ -1180,6 +1184,7 @@ const PDFViewerApplication = {
       ...apiParams,
       ...args,
       worker: this.pdfWorker, // #2480 modified by ngx-extended-pdf-viewer
+      cspPolicyService: args.cspPolicyService, // #2362 modified by ngx-extended-pdf-viewer
     });
     this.pdfLoadingTask = loadingTask;
 

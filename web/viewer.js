@@ -257,7 +257,7 @@ function getViewerConfiguration() {
   };
 }
 
-function webViewerLoad() {
+function webViewerLoad(cspPolicyService) { // #2362 modified by ngx-extended-pdf-viewer
   const config = getViewerConfiguration();
 
   if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("GENERIC")) {
@@ -286,6 +286,7 @@ function webViewerLoad() {
       // #2070 end of modification
     }
   }
+  config.cspPolicyService = cspPolicyService; // #2362 modified by ngx-extended-pdf-viewer
   PDFViewerApplication.run(config);
 }
 
