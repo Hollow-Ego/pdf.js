@@ -1807,6 +1807,7 @@ class UI {
      * @param {FlipSetting} setting - Configuration object
      */
     constructor(inBlock, app, setting) {
+        this.cspPolicyService = app.cspPolicyService; // #2362 modified by ngx-extended-pdf-viewer
         this.touchPoint = null;
         this.swipeTimeout = 250;
         this.onResize = () => {
@@ -1899,8 +1900,11 @@ class UI {
         };
         this.parentElement = inBlock;
         inBlock.classList.add('stf__parent');
+        // #2362 modified by ngx-extended-pdf-viewer
         // Add first wrapper
-        inBlock.insertAdjacentHTML('afterbegin', '<div class="stf__wrapper"></div>');
+        const wrapperHtml = this.cspPolicyService.createTrustedHTML('<div class="stf__wrapper"></div>');
+        inBlock.insertAdjacentHTML('afterbegin', wrapperHtml);
+        // #2362 end of modification by ngx-extended-pdf-viewer
         this.wrapper = inBlock.querySelector('.stf__wrapper');
         this.app = app;
         const k = this.app.getSettings().usePortrait ? 1 : 2;
@@ -2015,10 +2019,14 @@ class UI {
  * UI for HTML mode
  */
 class HTMLUI extends UI {
-    constructor(inBlock, app, setting, items) {
+    constructor(inBlock, app, setting, items, cspPolicyService) {
         super(inBlock, app, setting);
+        // #2362 modified by ngx-extended-pdf-viewer
+        this.cspPolicyService = cspPolicyService;
         // Second wrapper to HTML page
-        this.wrapper.insertAdjacentHTML('afterbegin', '<div class="stf__block"></div>');
+        const wrapperHtml = this.cspPolicyService.createTrustedHTML('<div class="stf__block"></div>');
+        this.wrapper.insertAdjacentHTML('afterbegin', wrapperHtml);
+        // #2362 end of modification by ngx-extended-pdf-viewer
         this.distElement = inBlock.querySelector('.stf__block');
         this.items = items;
         for (const item of items) {
@@ -2141,10 +2149,13 @@ class HTMLRender extends Render {
         this.createShadows();
     }
     createShadows() {
-        this.element.insertAdjacentHTML('beforeend', `<div class="stf__outerShadow"></div>
+      // #2362 modified by ngx-extended-pdf-viewer
+      const shadowHtml = this.app.cspPolicyService.createTrustedHTML(`<div class="stf__outerShadow"></div>
              <div class="stf__innerShadow"></div>
              <div class="stf__hardShadow"></div>
              <div class="stf__hardInnerShadow"></div>`);
+        this.element.insertAdjacentHTML('beforeend', shadowHtml);
+        // #2362 end of modification by ngx-extended-pdf-viewer
         this.outerShadow = this.element.querySelector('.stf__outerShadow');
         this.innerShadow = this.element.querySelector('.stf__innerShadow');
         this.hardShadow = this.element.querySelector('.stf__hardShadow');
@@ -2489,36 +2500,6 @@ class Settings {
     }
 }
 
-function styleInject(css, ref) {
-  if ( ref === void 0 ) ref = {};
-  var insertAt = ref.insertAt;
-
-  if (!css || typeof document === 'undefined') { return; }
-
-  var head = document.head || document.getElementsByTagName('head')[0];
-  var style = document.createElement('style');
-  style.type = 'text/css';
-
-  if (insertAt === 'top') {
-    if (head.firstChild) {
-      head.insertBefore(style, head.firstChild);
-    } else {
-      head.appendChild(style);
-    }
-  } else {
-    head.appendChild(style);
-  }
-
-  if (style.styleSheet) {
-    style.styleSheet.cssText = css;
-  } else {
-    style.appendChild(document.createTextNode(css));
-  }
-}
-
-var css_248z = ".stf__parent {\n  position: relative;\n  display: block;\n  box-sizing: border-box;\n  transform: translateZ(0);\n\n  -ms-touch-action: pan-y;\n  touch-action: pan-y;\n}\n\n.sft__wrapper {\n  position: relative;\n  width: 100%;\n  box-sizing: border-box;\n}\n\n.stf__parent canvas {\n  position: absolute;\n  width: 100%;\n  height: 100%;\n  left: 0;\n  top: 0;\n}\n\n.stf__block {\n  position: absolute;\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  perspective: 2000px;\n}\n\n.stf__item {\n  display: none;\n  position: absolute;\n  transform-style: preserve-3d;\n}\n\n.stf__outerShadow {\n  position: absolute;\n  left: 0;\n  top: 0;\n}\n\n.stf__innerShadow {\n  position: absolute;\n  left: 0;\n  top: 0;\n}\n\n.stf__hardShadow {\n  position: absolute;\n  left: 0;\n  top: 0;\n}\n\n.stf__hardInnerShadow {\n  position: absolute;\n  left: 0;\n  top: 0;\n}";
-styleInject(css_248z);
-
 /**
  * Class representing a main PageFlip object
  *
@@ -2532,7 +2513,7 @@ class PageFlip extends EventObject {
      * @param {HTMLElement} inBlock - Root HTML Element
      * @param {Object} setting - Configuration object
      */
-    constructor(inBlock, setting) {
+    constructor(inBlock, setting, cspPolicyService) { // #2362 modified by ngx-extended-pdf-viewer
         super();
         this.isUserTouch = false;
         this.isUserMove = false;
@@ -2540,6 +2521,7 @@ class PageFlip extends EventObject {
         this.pages = null;
         this.setting = new Settings().getSettings(setting);
         this.block = inBlock;
+        this.cspPolicyService = cspPolicyService; // #2362 modified by ngx-extended-pdf-viewer
     }
 
     /**
@@ -2567,7 +2549,7 @@ class PageFlip extends EventObject {
      * @param {(NodeListOf<HTMLElement>|HTMLElement[])} items - List of pages as HTML Element
      */
     loadFromHTML(items) {
-        this.ui = new HTMLUI(this.block, this, this.setting, items);
+        this.ui = new HTMLUI(this.block, this, this.setting, items, this.cspPolicyService); // #2362 modified by ngx-extended-pdf-viewer
         this.render = new HTMLRender(this, this.setting, this.ui.getDistElement());
         this.flipController = new Flip(this.render, this);
         this.pages = new HTMLPageCollection(this, this.render, this.ui.getDistElement(), items);

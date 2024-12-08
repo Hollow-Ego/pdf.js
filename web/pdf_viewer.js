@@ -394,6 +394,7 @@ class PDFViewer {
       // Ensure that Fluent is connected in e.g. the COMPONENTS build.
       this.l10n.translate(this.container);
     }
+    this.cspPolicyService = options.cspPolicyService; // #2362 modified by ngx-extended-pdf-viewer
   }
 
   // #2459 modified by ngx-extended-pdf-viewer
@@ -543,7 +544,8 @@ class PDFViewer {
               height: page1.clientHeight,
               showCover: true,
               size: "fixed",
-            });
+            },
+            this.cspPolicyService); // #2362 modified by ngx-extended-pdf-viewer
             this.pageFlip.loadFromHTML(this.container.querySelectorAll(".page"));
             // triggered by page turning
             this.pageFlip.on("flip", e => {
