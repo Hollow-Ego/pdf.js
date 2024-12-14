@@ -551,6 +551,7 @@ function createWorkerBundle(defines) {
 }
 
 function createWebBundle(defines, options) {
+  // return createUnifiedBundle(defines, options); // #2687 modified by ngx-extended-pdf-viewer
   const viewerFileConfig = createWebpackConfig(
     defines,
     {
@@ -564,7 +565,7 @@ function createWebBundle(defines, options) {
     }
   );
   return gulp
-    .src("./web/viewer.js", { encoding: false })
+    .src(["./web/viewer.js", "./src/pdf.js"], { encoding: false }) // #2687 modified by ngx-extended-pdf-viewer
     .pipe(webpack2Stream(viewerFileConfig));
 }
 
@@ -1007,7 +1008,7 @@ function buildGeneric(defines, dir) {
   fs.rmSync(dir, { recursive: true, force: true });
 
   return ordered([
-    createMainBundle(defines).pipe(gulp.dest(dir + "build")),
+    // createMainBundle(defines).pipe(gulp.dest(dir + "build")), // #2687 modified by ngx-extended-pdf-viewer
     createWorkerBundle(defines).pipe(gulp.dest(dir + "build")),
     createSandboxBundle(defines).pipe(gulp.dest(dir + "build")),
     createWebBundle(defines, {
@@ -1194,7 +1195,7 @@ function buildMinified(defines, dir) {
   fs.rmSync(dir, { recursive: true, force: true });
 
   return ordered([
-    createMainBundle(defines).pipe(gulp.dest(dir + "build")),
+    // createMainBundle(defines).pipe(gulp.dest(dir + "build")), // #2687 modified by ngx-extended-pdf-viewer
     createWorkerBundle(defines).pipe(gulp.dest(dir + "build")),
     createSandboxBundle(defines).pipe(gulp.dest(dir + "build")),
     createWebBundle(defines, {
@@ -1350,9 +1351,11 @@ gulp.task(
       fs.rmSync(MOZCENTRAL_DIR, { recursive: true, force: true });
 
       return ordered([
-        createMainBundle(defines).pipe(
-          gulp.dest(MOZCENTRAL_CONTENT_DIR + "build")
-        ),
+        // #2687 modified by ngx-extended-pdf-viewer
+        // Bundle(defines).pipe(
+        //  gulp.dest(MOZCENTRAL_CONTENT_DIR + "build")
+        // ),
+        // #2687 end of modification by ngx-extended-pdf-viewer
         createScriptingBundle(defines).pipe(
           gulp.dest(MOZCENTRAL_CONTENT_DIR + "build")
         ),
@@ -1451,9 +1454,9 @@ gulp.task(
       const version = getVersionJSON().version;
 
       return ordered([
-        createMainBundle(defines).pipe(
-          gulp.dest(CHROME_BUILD_CONTENT_DIR + "build")
-        ),
+        // createMainBundle(defines).pipe(
+        //  gulp.dest(CHROME_BUILD_CONTENT_DIR + "build")
+        // ),
         createWorkerBundle(defines).pipe(
           gulp.dest(CHROME_BUILD_CONTENT_DIR + "build")
         ),

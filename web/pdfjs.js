@@ -1,3 +1,4 @@
+/* eslint-disable sort-imports */
 /* Copyright 2016 Mozilla Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,52 +14,54 @@
  * limitations under the License.
  */
 
-const {
+ // #2687 modified by ngx-extended-pdf-viewer (applies to the entire file)
+ // the modification allows for a unified bundle (pdf.js + viewer.js merged into a single file)
+
+import {
   AbortException,
-  AnnotationEditorLayer,
   AnnotationEditorParamsType,
   AnnotationEditorType,
-  AnnotationEditorUIManager,
-  AnnotationLayer,
   AnnotationMode,
-  build,
   CMapCompressionType,
-  ColorPicker,
   createValidAbsoluteUrl,
-  DOMSVGFactory,
-  DrawLayer,
   FeatureTest,
-  fetchData,
-  getDocument,
-  getFilenameFromUrl,
-  getPdfFilenameFromUrl,
-  getXfaPageViewport,
-  GlobalWorkerOptions,
   ImageKind,
   InvalidPDFException,
-  isDataScheme,
-  isPdfFile,
-  MissingPDFException,
-  noContextMenu,
   normalizeUnicode,
   OPS,
-  OutputScale,
   PasswordResponses,
-  PDFDataRangeTransport,
-  PDFDateString,
-  PDFWorker,
   PermissionFlag,
-  PixelsPerInch,
-  RenderingCancelledException,
-  setLayerDimensions,
   shadow,
-  TextLayer,
   UnexpectedResponseException,
   Util,
   VerbosityLevel,
+} from "../src/shared/util.js";
+
+import { build, getDocument } from "../src/display/api.js";
+import { getFilenameFromUrl, getPdfFilenameFromUrl, isDataScheme, isPdfFile, noContextMenu } from "../src/display/display_utils.js";
+
+import {
+  fetchData,
+  getXfaPageViewport,
+  DOMSVGFactory,
+  GlobalWorkerOptions,
+  OutputScale,
+  PDFDataRangeTransport,
+  PDFDateString,
+  PDFWorker,
+  PixelsPerInch,
+  RenderingCancelledException,
+  setLayerDimensions,
   version,
+  AnnotationEditorLayer,
+  AnnotationEditorUIManager,
+  AnnotationLayer,
+  ColorPicker,
+  DrawLayer,
+  MissingPDFException,
+  TextLayer,
   XfaLayer,
-} = globalThis.pdfjsLib;
+} from "../src/pdf.js";
 
 export {
   AbortException,
