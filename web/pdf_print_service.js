@@ -104,6 +104,7 @@ class PDFPrintService {
       printResolution,
       printAnnotationStoragePromise = null,
       eventBus, // #588 modified by ngx-extended-pdf-viewer
+      cspPolicyService, // #2362 modified by ngx-extended-pdf-viewer
     },
     isInPDFPrintRange,
     filteredPageCount
@@ -127,6 +128,7 @@ class PDFPrintService {
     this.filteredPageCount = filteredPageCount;
     this.isInPDFPrintRange = isInPDFPrintRange;
     // #2377 end of modification by ngx-extended-pdf-viewer
+    this.cspPolicyService = cspPolicyService; // #2362 modified by ngx-extended-pdf-viewer
   }
 
   layout() {
@@ -159,8 +161,16 @@ class PDFPrintService {
     // will be ignored and the user has to select the correct paper size in
     // the UI if wanted.
     this.pageStyleSheet = document.createElement("style");
-    this.pageStyleSheet.textContent = `@page { size: ${width}pt ${height}pt;}`;
+    const textContent = `@page { size: ${width}pt ${height}pt;}`;
+
+    // #2362 modified by ngx-extended-pdf-viewer
+    if (this.cspPolicyService) {
+      this.cspPolicyService.addTrustedCSS(this.pageStyleSheet, textContent);
+    } else {
+      this.pageStyleSheet.textContent = textContent;
+    }
     body.append(this.pageStyleSheet);
+    // #2362 end of modification by ngx-extended-pdf-viewer
   }
 
   destroy() {
