@@ -2046,6 +2046,7 @@ const PDFViewerApplication = {
       printResolution: AppOptions.get("printResolution"),
       printAnnotationStoragePromise: this._printAnnotationStoragePromise,
       eventBus: this.pdfViewer.eventBus, // #588 modified by ngx-extended-pdf-viewer
+      cspPolicyService: this.cspPolicyService, // #2362 modified by ngx-extended-pdf-viewer
     });
     this.forceRendering();
     // Disable the editor-indicator during printing (fixes bug 1790552).
