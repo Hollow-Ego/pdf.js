@@ -76,23 +76,23 @@ function getViewerConfiguration() {
       customScaleOption: document.getElementById("customScaleOption"),
       previous: document.getElementById("previous"),
       next: document.getElementById("next"),
-      zoomIn: document.getElementById("primaryZoomIn"), // modified by ngx-extended-pdf-viewer
-      zoomOut: document.getElementById("primaryZoomOut"), // modified by ngx-extended-pdf-viewer
+      zoomIn: document.getElementById("primaryZoomIn") ?? document.getElementById("zoomInButton"), // modified by ngx-extended-pdf-viewer
+      zoomOut: document.getElementById("primaryZoomOut") ?? document.getElementById("zoomOutButton"), // modified by ngx-extended-pdf-viewer
       print: document.getElementById("printButton"),
-      editorFreeTextButton: document.getElementById("primaryEditorFreeText"), // modified by ngx-extended-pdf-viewer
+      editorFreeTextButton: document.getElementById("primaryEditorFreeText") ?? document.getElementById("editorFreeTextButton"), // modified by ngx-extended-pdf-viewer
       editorFreeTextParamsToolbar: document.getElementById(
         "editorFreeTextParamsToolbar"
       ),
-      editorHighlightButton: document.getElementById("primaryEditorHighlight"), // modified by ngx-extended-pdf-viewer
+      editorHighlightButton: document.getElementById("primaryEditorHighlight") ?? document.getElementById("editorHighlightButton"), // modified by ngx-extended-pdf-viewer
       editorHighlightParamsToolbar: document.getElementById(
         "editorHighlightParamsToolbar"
       ),
       editorHighlightColorPicker: document.getElementById(
         "editorHighlightColorPicker"
       ),
-      editorInkButton: document.getElementById("primaryEditorInk"),  // modified by ngx-extended-pdf-viewer
+      editorInkButton: document.getElementById("primaryEditorInk") ?? document.getElementById("editorInkButton"),  // modified by ngx-extended-pdf-viewer
       editorInkParamsToolbar: document.getElementById("editorInkParamsToolbar"),
-      editorStampButton: document.getElementById("primaryEditorStamp"),  // modified by ngx-extended-pdf-viewer
+      editorStampButton: document.getElementById("primaryEditorStamp") ?? document.getElementById("editorStampButton"),  // modified by ngx-extended-pdf-viewer
       presentationModeButton: document.getElementById("presentationMode"), // #1807 modified by ngx-extended-pdf-viewer
       editorStampParamsToolbar: document.getElementById(
         "editorStampParamsToolbar"
@@ -135,7 +135,7 @@ function getViewerConfiguration() {
       // Divs (and sidebar button)
       outerContainer: document.getElementById("outerContainer"),
       sidebarContainer: document.getElementById("sidebarContainer"),
-      toggleButton: document.getElementById("primarySidebarToggle"), // modified by ngx-extended-pdf-viewer
+      toggleButton: document.getElementById("primarySidebarToggle")  ?? document.getElementById("sidebarToggleButton"), // modified by ngx-extended-pdf-viewer
       resizer: document.getElementById("sidebarResizer"),
       // Buttons
       thumbnailButton: document.getElementById("viewThumbnail"),
@@ -305,6 +305,17 @@ if (globalThis.STANDALONE_VIEWER) {
     document.addEventListener("DOMContentLoaded", webViewerLoad, true);
   }
 }
+
+// #2687 modified by ngx-extended-pdf-viewer - unified pdf.js and viewer.js into a single file
+const event = new CustomEvent("ngxViewerFileHasBeenLoaded", {
+  detail: {
+    PDFViewerApplication,
+    PDFViewerApplicationConstants: AppConstants,
+    PDFViewerApplicationOptions: AppOptions,
+    webViewerLoad,
+  },
+});
+document.dispatchEvent(event);
 // end of modification by ngx-extended-pdf-viewer
 
 export { PDFViewerApplication, AppConstants as PDFViewerApplicationConstants, AppOptions as PDFViewerApplicationOptions, webViewerLoad };
