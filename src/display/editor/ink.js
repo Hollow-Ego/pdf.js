@@ -24,43 +24,15 @@ import { InkAnnotationElement } from "../annotation_layer.js";
 import { noContextMenu } from "../display_utils.js";
 import { opacityToHex } from "./tools.js";
 
-// #2527 modified by ngx-extended-pdf-viewer
-class PointerType {
-  static current = null;
-
-  constructor(editor) {
-    if (PointerType.current === null) {
-      PointerType.current = "";
-      window.addEventListener("pointerdown", this.windowPointerDown, true);
-    }
-  }
-
-  destroy() {
-    if (PointerType.current !== null) {
-      window.removeEventListener("pointerdown", this.windowPointerDown, true);
-      PointerType.current = null;
-    }
-  }
-
-  windowPointerDown(event) {
-    PointerType.current = event.pointerType;
-    return true;
-  }
-}
-const pointerType = new PointerType();
-// #2527 end of modification by ngx-extended-pdf-viewer
-
 /**
  * Basic draw editor in order to generate an Ink annotation.
  */
 class InkEditor extends AnnotationEditor {
+  #activePointers = new Set(); // #2655 modified by ngx-extended-pdf-viewer
+
   #baseHeight = 0;
 
   #baseWidth = 0;
-
-  // #2527 modified by ngx-extended-pdf-viewer
-  #boundCanvasTouchMove = this.canvasTouchMove.bind(this);
-  // #2527 end of modification by ngx-extended-pdf-viewer
 
   #canvasContextMenuTimeoutId = null;
 
@@ -108,18 +80,7 @@ class InkEditor extends AnnotationEditor {
     this.x = 0;
     this.y = 0;
     this._willKeepAspectRatio = true;
-    this.editorPointerType = null;
   }
-
-  // #2527 modified by ngx-extended-pdf-viewer
-  initializePointerType() {
-    this.editorPointerType = PointerType.current;
-  }
-
-  resetPointerType() {
-    this.editorPointerType = null;
-  }
-  // #2527 end of modification by ngx-extended-pdf-viewer
 
   /** @inheritdoc */
   static initialize(l10n, uiManager) {
@@ -363,9 +324,6 @@ class InkEditor extends AnnotationEditor {
     }
 
     super.enableEditMode();
-    // #2527 modified by ngx-extended-pdf-viewer
-    setTimeout(() => this.initializePointerType());
-    // #2527 end of modification by ngx-extended-pdf-viewer
     this._isDraggable = false;
     this.#addPointerdownListener();
   }
@@ -377,9 +335,6 @@ class InkEditor extends AnnotationEditor {
     }
 
     super.disableEditMode();
-    // #2527 modified by ngx-extended-pdf-viewer
-    this.resetPointerType();
-    // #2527 end of modification by ngx-extended-pdf-viewer
     this._isDraggable = !this.isEmpty();
     this.div.classList.remove("editing");
     this.#removePointerdownListener();
@@ -459,10 +414,6 @@ class InkEditor extends AnnotationEditor {
     );
     this.canvas.addEventListener("pointerup", this.canvasPointerup.bind(this), {
       signal,
-    });
-    this.canvas.addEventListener("touchmove", this.#boundCanvasTouchMove, {
-      signal: this._uiManager._signal,
-      passive: false
     });
 
     this.isEditing = true;
@@ -769,9 +720,10 @@ class InkEditor extends AnnotationEditor {
    * @param {PointerEvent} event
    */
   canvasPointerdown(event) {
-    if (event.button !== 0 || !this.isInEditMode() || this.#disableEditing || this.editorPointerType !== event.pointerType) {
+    if (event.button !== 0 || !this.isInEditMode() || this.#disableEditing) {
       return;
     }
+    this.#activePointers.add(event.pointerId); // #2655 modified by ngx-extended-pdf-viewer
 
     // We want to draw on top of any other editors.
     // Since it's the last child, there's no need to give it a higher z-index.
@@ -780,11 +732,9 @@ class InkEditor extends AnnotationEditor {
     event.preventDefault();
 
     if (!this.div.contains(document.activeElement)) {
-      // #1802 modified by ngx-extended-pdf-viewer
       this.div.focus({
         preventScroll: true /* See issue #17327 */,
       });
-      // #1802 end of modification by ngx-extended-pdf-viewer
     }
 
     this.#startDrawing(event.offsetX, event.offsetY);
@@ -795,8 +745,10 @@ class InkEditor extends AnnotationEditor {
    * @param {PointerEvent} event
    */
   canvasPointermove(event) {
-    event.preventDefault();
-    this.#draw(event.offsetX, event.offsetY);
+    if (this.#activePointers.has(event.pointerId)) { // #2655 modified by ngx-extended-pdf-viewer
+      event.preventDefault();
+      this.#draw(event.offsetX, event.offsetY);
+    }
   }
 
   /**
@@ -804,6 +756,7 @@ class InkEditor extends AnnotationEditor {
    * @param {PointerEvent} event
    */
   canvasPointerup(event) {
+    this.#activePointers.delete(event.pointerId); // #2655 modified by ngx-extended-pdf-viewer
     event.preventDefault();
     this.#endDrawing(event);
   }
@@ -813,17 +766,9 @@ class InkEditor extends AnnotationEditor {
    * @param {PointerEvent} event
    */
   canvasPointerleave(event) {
-    this.#endDrawing(event);
-  }
-
-  canvasTouchMove(event) {
-    // #2527 modified by ngx-extended-pdf-viewer
-    if (!this.isInEditMode() || this.#disableEditing || this.editorPointerType !== PointerType.current) {
-      // #2527 end of modification by ngx-extended-pdf-viewer
-      return;
+    if (this.#activePointers.has(event.pointerId)) { // #2655 modified by ngx-extended-pdf-viewer
+      this.#endDrawing(event);
     }
-    // disable default scroll behaviour on touch move
-    event.preventDefault();
   }
 
   /**
@@ -833,8 +778,6 @@ class InkEditor extends AnnotationEditor {
   #endDrawing(event) {
     this.#drawingAC?.abort();
     this.#drawingAC = null;
-
-    this.canvas.removeEventListener("touchmove", this.#boundCanvasTouchMove);
 
     this.#addPointerdownListener();
     // Slight delay to avoid the context menu to appear (it can happen on a long
