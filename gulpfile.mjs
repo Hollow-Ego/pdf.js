@@ -12,7 +12,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/* eslint-env node */
 
 import {
   babelPluginPDFJSPreprocessor,
@@ -84,7 +83,7 @@ const ENV_TARGETS = [
   "Chrome >= 103",
   "Firefox ESR",
   "Safari >= 16.4",
-  "Node >= 18",
+  "Node >= 20",
   "> 1%",
   "not IE > 0",
   "not dead",
@@ -99,7 +98,7 @@ const AUTOPREFIXER_CONFIG = {
 const BABEL_TARGETS = ENV_TARGETS.join(", ");
 
 const BABEL_PRESET_ENV_OPTS = Object.freeze({
-  corejs: "3.38.1",
+  corejs: "3.39.0",
   exclude: ["web.structured-clone"],
   shippedProposals: true,
   useBuiltIns: "usage",
@@ -387,6 +386,7 @@ function createWebpackConfig(
     module: {
       rules: [
         {
+          test: /\.[mc]?js$/,
           loader: "babel-loader",
           exclude: babelExcludeRegExp,
           options: {
@@ -692,12 +692,9 @@ function runTests(testsName, { bot = false, xfaOnly = false } = {}) {
         if (!bot) {
           args.push("--reftest");
         } else {
-          const os = process.env.OS;
-          if (/windows/i.test(os)) {
-            // The browser-tests are too slow in Google Chrome on the Windows
-            // bot, causing a timeout, hence disabling them for now.
-            forceNoChrome = true;
-          }
+          // The browser-tests are too slow in Google Chrome on the bots,
+          // causing a timeout, hence disabling them for now.
+          forceNoChrome = true;
         }
         if (xfaOnly) {
           args.push("--xfaOnly");
@@ -776,12 +773,10 @@ function makeRef(done, bot) {
   let forceNoChrome = false;
   const args = ["test.mjs", "--masterMode"];
   if (bot) {
-    const os = process.env.OS;
-    if (/windows/i.test(os)) {
-      // The browser-tests are too slow in Google Chrome on the Windows
-      // bot, causing a timeout, hence disabling them for now.
-      forceNoChrome = true;
-    }
+    // The browser-tests are too slow in Google Chrome on the bots,
+    // causing a timeout, hence disabling them for now.
+    forceNoChrome = true;
+
     args.push("--noPrompts", "--strictVerify");
   }
   if (process.argv.includes("--noChrome") || forceNoChrome) {
@@ -1988,8 +1983,6 @@ gulp.task("lint", function (done) {
   // Ensure that we lint the Firefox specific *.jsm files too.
   const esLintOptions = [
     "node_modules/eslint/bin/eslint",
-    "--ext",
-    ".js,.jsm,.mjs,.json",
     ".",
     "--report-unused-disable-directives",
   ];
@@ -2018,8 +2011,9 @@ gulp.task("lint", function (done) {
 
   const svgLintOptions = [
     "node_modules/svglint/bin/cli.js",
-    "web/**/*.svg",
+    "**/*.svg",
     "--ci",
+    "--no-summary",
   ];
 
   const esLintProcess = startNode(esLintOptions, { stdio: "inherit" });
@@ -2044,12 +2038,7 @@ gulp.task("lint", function (done) {
         }
 
         const svgLintProcess = startNode(svgLintOptions, {
-          stdio: "pipe",
-        });
-        svgLintProcess.stdout.setEncoding("utf8");
-        svgLintProcess.stdout.on("data", m => {
-          m = m.toString().replace(/-+ Summary -+.*/ms, "");
-          console.log(m);
+          stdio: "inherit",
         });
         svgLintProcess.on("close", function (svgLintCode) {
           if (svgLintCode !== 0) {
@@ -2288,8 +2277,7 @@ function packageJson() {
     bugs: DIST_BUGS_URL,
     license: DIST_LICENSE,
     optionalDependencies: {
-      canvas: "^3.0.0-rc2",
-      path2d: "^0.2.1",
+      "@napi-rs/canvas": "^0.1.64",
     },
     browser: {
       canvas: false,
@@ -2303,7 +2291,7 @@ function packageJson() {
       url: `git+${DIST_GIT_URL}`,
     },
     engines: {
-      node: ">=18",
+      node: ">=20",
     },
     scripts: {},
   };

@@ -96,6 +96,7 @@ const AnnotationEditorParamsType = {
   HIGHLIGHT_THICKNESS: 33,
   HIGHLIGHT_FREE: 34,
   HIGHLIGHT_SHOW_ALL: 35,
+  DRAW_STEP: 41,
 };
 
 // Permission flags from Table 22, Section 7.6.3.2 of the PDF specification.
@@ -370,6 +371,7 @@ function info(msg) {
     } else if (Window && NgxConsole) { // #804 ngx-extended-pdf-viewer
       NgxConsole.log(`Info: ${msg}`); // #804 ngx-extended-pdf-viewer
     } else {
+      // eslint-disable-next-line no-console
       console.log(`Info: ${msg}`);
     }
   }
@@ -383,7 +385,8 @@ function warn(msg) {
     } else if (Window && NgxConsole) { // #804 ngx-extended-pdf-viewer
       NgxConsole.log(`Warning: ${msg}`); // #804 ngx-extended-pdf-viewer
     } else {
-      NgxConsole.log(`Warning: ${msg}`);
+      // eslint-disable-next-line no-console
+      console.log(`Warning: ${msg}`);
     }
   }
 }
@@ -639,6 +642,14 @@ class FeatureTest {
       this,
       "isOffscreenCanvasSupported",
       typeof OffscreenCanvas !== "undefined"
+    );
+  }
+
+  static get isImageDecoderSupported() {
+    return shadow(
+      this,
+      "isImageDecoderSupported",
+      typeof ImageDecoder !== "undefined"
     );
   }
 
@@ -1084,21 +1095,12 @@ function normalizeUnicode(str) {
 function getUuid() {
   if (
     (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) ||
-    (typeof crypto !== "undefined" && typeof crypto?.randomUUID === "function")
+    typeof crypto.randomUUID === "function"
   ) {
     return crypto.randomUUID();
   }
   const buf = new Uint8Array(32);
-  if (
-    typeof crypto !== "undefined" &&
-    typeof crypto?.getRandomValues === "function"
-  ) {
-    crypto.getRandomValues(buf);
-  } else {
-    for (let i = 0; i < 32; i++) {
-      buf[i] = Math.floor(Math.random() * 255);
-    }
-  }
+  crypto.getRandomValues(buf);
   return bytesToString(buf);
 }
 

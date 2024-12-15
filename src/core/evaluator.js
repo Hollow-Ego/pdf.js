@@ -12,7 +12,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/* eslint-disable no-var */
 
 import {
   AbortException,
@@ -72,6 +71,7 @@ import { getGlyphsUnicode } from "./glyphlist.js";
 import { getMetrics } from "./metrics.js";
 import { getUnicodeForGlyph } from "./unicode.js";
 import { ImageResizer } from "./image_resizer.js";
+import { JpegStream } from "./jpeg_stream.js";
 import { MurmurHash3_64 } from "../shared/murmurhash3.js";
 import { OperatorList } from "./operator_list.js";
 import { PDFImage } from "./image.js";
@@ -83,7 +83,7 @@ const DefaultPartialEvaluatorOptions = Object.freeze({
   ignoreErrors: false,
   isEvalSupported: true,
   isOffscreenCanvasSupported: false,
-  isChrome: false,
+  isImageDecoderSupported: false,
   canvasMaxAreaInBytes: -1,
   fontExtraProperties: false,
   useSystemFonts: true,
@@ -233,14 +233,9 @@ class PartialEvaluator {
 
     this._regionalImageCache = new RegionalImageCache();
     this._fetchBuiltInCMapBound = this.fetchBuiltInCMap.bind(this);
-    if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
-      ImageResizer.setMaxArea(this.options.canvasMaxAreaInBytes);
-    } else {
-      ImageResizer.setOptions({
-        isChrome: this.options.isChrome,
-        maxArea: this.options.canvasMaxAreaInBytes,
-      });
-    }
+
+    ImageResizer.setOptions(this.options);
+    JpegStream.setOptions(this.options);
   }
 
   /**
@@ -381,6 +376,16 @@ class PartialEvaluator {
     return false;
   }
 
+  async #fetchData(url) {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch file "${url}" with "${response.statusText}".`
+      );
+    }
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
   async fetchBuiltInCMap(name) {
     const cachedData = this.builtInCMapCache.get(name);
     if (cachedData) {
@@ -395,18 +400,10 @@ class PartialEvaluator {
 	  }
     if (cMapUrl !== null) {
       // Only compressed CMaps are (currently) supported here.
-      const url = `${cMapUrl}${name}.bcmap`;
-      // #376 end of modification
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(
-          `fetchBuiltInCMap: failed to fetch file "${url}" with "${response.statusText}".`
-        );
-      }
-      data = {
-        cMapData: new Uint8Array(await response.arrayBuffer()),
-        isCompressed: true,
-      };
+      const cMapData = await this.#fetchData(
+        `${cMapUrl}${name}.bcmap`
+      );
+      data = { cMapData, isCompressed: true };
     } else {
       // Get the data on the main-thread instead.
       data = await this.handler.sendWithPromise("FetchBuiltInCMap", { name });
@@ -437,30 +434,19 @@ class PartialEvaluator {
       filename = standardFontNameToFileName[name];
     let data;
 
-    if (this.options.standardFontDataUrl !== null) {
-      const url = `${this.options.standardFontDataUrl}${filename}`;
-      const response = await fetch(url);
-      if (!response.ok) {
-        warn(
-          `fetchStandardFontData: failed to fetch file "${url}" with "${response.statusText}".`
+    try {
+      if (this.options.standardFontDataUrl !== null) {
+        data = await this.#fetchData(
+          `${this.options.standardFontDataUrl}${filename}`
         );
       } else {
-        data = new Uint8Array(await response.arrayBuffer());
-      }
-    } else {
-      // Get the data on the main-thread instead.
-      try {
+        // Get the data on the main-thread instead.
         data = await this.handler.sendWithPromise("FetchStandardFontData", {
           filename,
         });
-      } catch (e) {
-        warn(
-          `fetchStandardFontData: failed to fetch file "${filename}" with "${e}".`
-        );
       }
-    }
-
-    if (!data) {
+    } catch (ex) {
+      warn(ex);
       return null;
     }
     // Cache the "raw" standard font data, to avoid fetching it repeatedly
@@ -1904,7 +1890,7 @@ class PartialEvaluator {
             );
             return;
           case OPS.setFont:
-            var fontSize = args[1];
+            const fontSize = args[1];
             // eagerly collect all fonts
             next(
               self
@@ -1930,7 +1916,7 @@ class PartialEvaluator {
             parsingText = false;
             break;
           case OPS.endInlineImage:
-            var cacheKey = args[0].cacheKey;
+            const cacheKey = args[0].cacheKey;
             if (cacheKey) {
               const localImage = localImageCache.getByName(cacheKey);
               if (localImage) {
@@ -1963,8 +1949,8 @@ class PartialEvaluator {
               self.ensureStateFont(stateManager.state);
               continue;
             }
-            var combinedGlyphs = [];
-            var state = stateManager.state;
+            const combinedGlyphs = [],
+              state = stateManager.state;
             for (const arrItem of args[0]) {
               if (typeof arrItem === "string") {
                 combinedGlyphs.push(...self.handleText(arrItem, state));
@@ -3096,6 +3082,8 @@ class PartialEvaluator {
 
       const operation = {};
       let stop,
+        name,
+        isValidName,
         args = [];
       while (!(stop = timeSlotManager.check())) {
         // The arguments parsed by read() are not used beyond this loop, so
@@ -3115,7 +3103,7 @@ class PartialEvaluator {
         switch (fn | 0) {
           case OPS.setFont:
             // Optimization to ignore multiple identical Tf commands.
-            var fontNameArg = args[0].name,
+            const fontNameArg = args[0].name,
               fontSizeArg = args[1];
             if (
               textState.font &&
@@ -3256,12 +3244,10 @@ class PartialEvaluator {
             break;
           case OPS.paintXObject:
             flushTextContentItem();
-            if (!xobjs) {
-              xobjs = resources.get("XObject") || Dict.empty;
-            }
+            xobjs ??= resources.get("XObject") || Dict.empty;
 
-            var isValidName = args[0] instanceof Name;
-            var name = args[0].name;
+            isValidName = args[0] instanceof Name;
+            name = args[0].name;
 
             if (isValidName && emptyXObjectCache.getByName(name)) {
               break;

@@ -20,13 +20,6 @@ import { fetchData as fetchDataDOM } from "../../src/display/display_utils.js";
 import { fetchData as fetchDataNode } from "../../src/display/node_utils.js";
 import { Ref } from "../../src/core/primitives.js";
 
-let fs, http;
-if (isNodeJS) {
-  // Native packages.
-  fs = await __non_webpack_import__("fs");
-  http = await __non_webpack_import__("http");
-}
-
 const TEST_PDFS_PATH = isNodeJS ? "./test/pdfs/" : "../pdfs/";
 
 const CMAP_URL = isNodeJS ? "./external/bcmaps/" : "../../external/bcmaps/";
@@ -132,9 +125,25 @@ function createIdFactory(pageIndex) {
 function createTemporaryNodeServer() {
   assert(isNodeJS, "Should only be used in Node.js environments.");
 
+  const fs = process.getBuiltinModule("fs"),
+    http = process.getBuiltinModule("http");
+  function isAcceptablePath(requestUrl) {
+    try {
+      // Reject unnormalized paths, to protect against path traversal attacks.
+      const url = new URL(requestUrl, "https://localhost/");
+      return url.pathname === requestUrl;
+    } catch {
+      return false;
+    }
+  }
   // Create http server to serve pdf data for tests.
   const server = http
     .createServer((request, response) => {
+      if (!isAcceptablePath(request.url)) {
+        response.writeHead(400);
+        response.end("Invalid path");
+        return;
+      }
       const filePath = process.cwd() + "/test/pdfs" + request.url;
       fs.promises.lstat(filePath).then(
         stat => {

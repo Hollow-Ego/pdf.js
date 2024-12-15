@@ -46,6 +46,7 @@ import {
   RenderTask,
 } from "../../src/display/api.js";
 import {
+  fetchData as fetchDataDOM,
   PageViewport,
   RenderingCancelledException,
   StatTimer,
@@ -115,6 +116,21 @@ describe("api", function () {
       }
     }
     return node;
+  }
+
+  async function getImageBlob(filename) {
+    if (isNodeJS) {
+      throw new Error("Not implemented.");
+    }
+    const TEST_IMAGES_PATH = "../images/";
+    const url = new URL(TEST_IMAGES_PATH + filename, window.location).href;
+
+    return fetchDataDOM(url, /* type = */ "blob");
+  }
+
+  async function getImageBitmap(filename) {
+    const blob = await getImageBlob(filename);
+    return createImageBitmap(blob);
   }
 
   describe("getDocument", function () {
@@ -623,7 +639,7 @@ describe("api", function () {
         expect(false).toEqual(true);
       } catch (reason) {
         expect(reason instanceof InvalidPDFException).toEqual(true);
-        expect(reason.message).toEqual("Invalid PDF structure.");
+        expect(reason.message).toEqual("Invalid Root reference.");
       }
 
       await loadingTask.destroy();
@@ -2422,19 +2438,19 @@ describe("api", function () {
       const manifesto = `
       The Mozilla Manifesto Addendum
       Pledge for a Healthy Internet
-      
+
       The open, global internet is the most powerful communication and collaboration resource we have ever seen.
       It embodies some of our deepest hopes for human progress.
       It enables new opportunities for learning, building a sense of shared humanity, and solving the pressing problems
       facing people everywhere.
-      
+
       Over the last decade we have seen this promise fulfilled in many ways.
       We have also seen the power of the internet used to magnify divisiveness,
       incite violence, promote hatred, and intentionally manipulate fact and reality.
       We have learned that we should more explicitly set out our aspirations for the human experience of the internet.
       We do so now.
       `.repeat(100);
-      expect(manifesto.length).toEqual(80500);
+      expect(manifesto.length).toEqual(79300);
 
       let loadingTask = getDocument(buildGetDocumentParams("empty.pdf"));
       let pdfDoc = await loadingTask.promise;
@@ -2472,14 +2488,7 @@ describe("api", function () {
       if (isNodeJS) {
         pending("Cannot create a bitmap from Node.js.");
       }
-
-      const TEST_IMAGES_PATH = "../images/";
-      const filename = "firefox_logo.png";
-      const path = new URL(TEST_IMAGES_PATH + filename, window.location).href;
-
-      const response = await fetch(path);
-      const blob = await response.blob();
-      const bitmap = await createImageBitmap(blob);
+      const bitmap = await getImageBitmap("firefox_logo.png");
 
       let loadingTask = getDocument(buildGetDocumentParams("empty.pdf"));
       let pdfDoc = await loadingTask.promise;
@@ -2524,14 +2533,7 @@ describe("api", function () {
       if (isNodeJS) {
         pending("Cannot create a bitmap from Node.js.");
       }
-
-      const TEST_IMAGES_PATH = "../images/";
-      const filename = "firefox_logo.png";
-      const path = new URL(TEST_IMAGES_PATH + filename, window.location).href;
-
-      const response = await fetch(path);
-      const blob = await response.blob();
-      const bitmap = await createImageBitmap(blob);
+      const bitmap = await getImageBitmap("firefox_logo.png");
 
       let loadingTask = getDocument(buildGetDocumentParams("bug1823296.pdf"));
       let pdfDoc = await loadingTask.promise;
@@ -2636,14 +2638,7 @@ describe("api", function () {
       if (isNodeJS) {
         pending("Cannot create a bitmap from Node.js.");
       }
-
-      const TEST_IMAGES_PATH = "../images/";
-      const filename = "firefox_logo.png";
-      const path = new URL(TEST_IMAGES_PATH + filename, window.location).href;
-
-      const response = await fetch(path);
-      const blob = await response.blob();
-      const bitmap = await createImageBitmap(blob);
+      const bitmap = await getImageBitmap("firefox_logo.png");
 
       let loadingTask = getDocument(
         buildGetDocumentParams("pdfjs_wikipedia.pdf")
@@ -2734,13 +2729,8 @@ describe("api", function () {
       if (isNodeJS) {
         pending("Cannot create a bitmap from Node.js.");
       }
+      const blob = await getImageBlob("firefox_logo.png");
 
-      const TEST_IMAGES_PATH = "../images/";
-      const filename = "firefox_logo.png";
-      const path = new URL(TEST_IMAGES_PATH + filename, window.location).href;
-
-      const response = await fetch(path);
-      const blob = await response.blob();
       let loadingTask, pdfDoc;
       let data = buildGetDocumentParams("empty.pdf");
 
@@ -2804,14 +2794,7 @@ describe("api", function () {
       if (isNodeJS) {
         pending("Cannot create a bitmap from Node.js.");
       }
-
-      const TEST_IMAGES_PATH = "../images/";
-      const filename = "firefox_logo.png";
-      const path = new URL(TEST_IMAGES_PATH + filename, window.location).href;
-
-      const response = await fetch(path);
-      const blob = await response.blob();
-      const bitmap = await createImageBitmap(blob);
+      const bitmap = await getImageBitmap("firefox_logo.png");
 
       let loadingTask = getDocument(buildGetDocumentParams("empty.pdf"));
       let pdfDoc = await loadingTask.promise;
@@ -2860,14 +2843,7 @@ describe("api", function () {
       if (isNodeJS) {
         pending("Cannot create a bitmap from Node.js.");
       }
-
-      const TEST_IMAGES_PATH = "../images/";
-      const filename = "firefox_logo.png";
-      const path = new URL(TEST_IMAGES_PATH + filename, window.location).href;
-
-      const response = await fetch(path);
-      const blob = await response.blob();
-      const bitmap = await createImageBitmap(blob);
+      const bitmap = await getImageBitmap("firefox_logo.png");
 
       let loadingTask = getDocument(buildGetDocumentParams("empty.pdf"));
       let pdfDoc = await loadingTask.promise;

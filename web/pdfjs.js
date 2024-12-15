@@ -37,7 +37,7 @@ import {
 } from "../src/shared/util.js";
 
 import { build, getDocument } from "../src/display/api.js";
-import { getFilenameFromUrl, getPdfFilenameFromUrl, isDataScheme, isPdfFile, noContextMenu } from "../src/display/display_utils.js";
+import { getFilenameFromUrl, getPdfFilenameFromUrl, isDataScheme, isPdfFile, noContextMenu, stopEvent } from "../src/display/display_utils.js";
 
 import {
   fetchData,
@@ -100,6 +100,7 @@ export {
   RenderingCancelledException,
   setLayerDimensions,
   shadow,
+  stopEvent,
   TextLayer,
   UnexpectedResponseException,
   Util,

@@ -114,12 +114,13 @@ class PDFDocumentProperties {
     }
 
     // Get the document properties.
-    const {
-      info,
-      /* metadata, */
-      /* contentDispositionFilename, */
-      contentLength,
-    } = await this.pdfDocument.getMetadata();
+    const [
+      { info, /* metadata, contentDispositionFilename, */ contentLength },
+      pdfPage,
+    ] = await Promise.all([
+      this.pdfDocument.getMetadata(),
+      this.pdfDocument.getPage(currentPageNumber),
+    ]);
 
     const [
       fileName,
@@ -133,10 +134,7 @@ class PDFDocumentProperties {
       this.#parseFileSize(contentLength),
       this.#parseDate(info.CreationDate),
       this.#parseDate(info.ModDate),
-      // eslint-disable-next-line arrow-body-style
-      this.pdfDocument.getPage(currentPageNumber).then(pdfPage => {
-        return this.#parsePageSize(getPageSizeInches(pdfPage), pagesRotation);
-      }),
+      this.#parsePageSize(getPageSizeInches(pdfPage), pagesRotation),
       this.#parseLinearization(info.IsLinearized),
     ]);
 

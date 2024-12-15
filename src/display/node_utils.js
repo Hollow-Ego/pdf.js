@@ -12,6 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/* globals process */
 
 import { isNodeJS, warn } from "../shared/util.js";
 import { BaseCanvasFactory } from "./canvas_factory.js";
@@ -28,96 +29,54 @@ if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
 // #1976 modified by ngx-extended-pdf-viewer - removed because this code
 // confuses Vite
 /*
-if (isNodeJS) {
-  // eslint-disable-next-line no-var
-  var packageCapability = Promise.withResolvers();
-  // eslint-disable-next-line no-var
-  var packageMap = null;
+if (
+  typeof PDFJSDev !== "undefined" &&
+  !PDFJSDev.test("SKIP_BABEL") &&
+  isNodeJS
+) {
+  let canvas;
+  try {
+    const require = process
+      .getBuiltinModule("module")
+      .createRequire(import.meta.url);
 
-  const loadPackages = async () => {
-    // Native packages.
-    const fs = await __non_webpack_import__("fs"),
-      http = await __non_webpack_import__("http"),
-      https = await __non_webpack_import__("https"),
-      url = await __non_webpack_import__("url");
-
-    // Optional, third-party, packages.
-    let canvas, path2d;
-    if (typeof PDFJSDev !== "undefined" && !PDFJSDev.test("SKIP_BABEL")) {
-      try {
-        canvas = await __non_webpack_import__("canvas");
-      } catch {}
-      try {
-        path2d = await __non_webpack_import__("path2d");
-      } catch {}
+    try {
+      canvas = require("@napi-rs/canvas");
+    } catch (ex) {
+      warn(`Cannot load "@napi-rs/canvas" package: "${ex}".`);
     }
+  } catch {}
 
-    return new Map(Object.entries({ fs, http, https, url, canvas, path2d }));
-  };
-
-  loadPackages().then(
-    map => {
-      packageMap = map;
-      packageCapability.resolve();
-
-      if (typeof PDFJSDev === "undefined" || PDFJSDev.test("SKIP_BABEL")) {
-        return;
-      }
-      if (!globalThis.DOMMatrix) {
-        const DOMMatrix = map.get("canvas")?.DOMMatrix;
-
-        if (DOMMatrix) {
-          globalThis.DOMMatrix = DOMMatrix;
-        } else {
-          warn("Cannot polyfill `DOMMatrix`, rendering may be broken.");
-        }
-      }
-      if (!globalThis.Path2D) {
-        const CanvasRenderingContext2D =
-          map.get("canvas")?.CanvasRenderingContext2D;
-        const applyPath2DToCanvasRenderingContext =
-          map.get("path2d")?.applyPath2DToCanvasRenderingContext;
-        const Path2D = map.get("path2d")?.Path2D;
-
-        if (
-          CanvasRenderingContext2D &&
-          applyPath2DToCanvasRenderingContext &&
-          Path2D
-        ) {
-          try {
-            applyPath2DToCanvasRenderingContext(CanvasRenderingContext2D);
-          } catch (ex) {
-            warn(`applyPath2DToCanvasRenderingContext: "${ex}".`);
-          }
-          globalThis.Path2D = Path2D;
-        } else {
-          warn("Cannot polyfill `Path2D`, rendering may be broken.");
-        }
-      }
-    },
-    reason => {
-      warn(`loadPackages: ${reason}`);
-
-      packageMap = new Map();
-      packageCapability.resolve();
+  if (!globalThis.DOMMatrix) {
+    if (canvas?.DOMMatrix) {
+      globalThis.DOMMatrix = canvas.DOMMatrix;
+    } else {
+      warn("Cannot polyfill `DOMMatrix`, rendering may be broken.");
     }
-  );
+  }
+  if (!globalThis.ImageData) {
+    if (canvas?.ImageData) {
+      globalThis.ImageData = canvas.ImageData;
+    } else {
+      warn("Cannot polyfill `ImageData`, rendering may be broken.");
+    }
+  }
+  if (!globalThis.Path2D) {
+    if (canvas?.Path2D) {
+      globalThis.Path2D = canvas.Path2D;
+    } else {
+      warn("Cannot polyfill `Path2D`, rendering may be broken.");
+    }
+  }
 }
+
 */
 // #1976 end of modification by ngx-extended-pdf-viewer
 
-class NodePackages {
-  static get promise() {
-    return undefined; // #1976 modification by ngx-extended-pdf-viewer
-  }
 
-  static get(name) {
-    return undefined; // #1976 modification by ngx-extended-pdf-viewer
-  }
-}
 
 async function fetchData(url) {
-  const fs = NodePackages.get("fs");
+  const fs = process.getBuiltinModule("fs");
   const data = await fs.promises.readFile(url);
   return new Uint8Array(data);
 }
@@ -129,7 +88,10 @@ class NodeCanvasFactory extends BaseCanvasFactory {
    * @ignore
    */
   _createCanvas(width, height) {
-    const canvas = NodePackages.get("canvas");
+    const require = process
+      .getBuiltinModule("module")
+      .createRequire(import.meta.url);
+    const canvas = require("@napi-rs/canvas");
     return canvas.createCanvas(width, height);
   }
 }
@@ -157,6 +119,5 @@ export {
   NodeCanvasFactory,
   NodeCMapReaderFactory,
   NodeFilterFactory,
-  NodePackages,
   NodeStandardFontDataFactory,
 };

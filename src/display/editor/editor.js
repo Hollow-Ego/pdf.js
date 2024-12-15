@@ -23,9 +23,9 @@ import {
   KeyboardManager,
 } from "./tools.js";
 import { FeatureTest, shadow, unreachable } from "../../shared/util.js";
+import { noContextMenu, stopEvent } from "../display_utils.js";
 import { AltText } from "./alt_text.js";
 import { EditorToolbar } from "./toolbar.js";
-import { noContextMenu } from "../display_utils.js";
 
 /**
  * @typedef {Object} AnnotationEditorParameters
@@ -48,9 +48,15 @@ class AnnotationEditor {
 
   #disabled = false;
 
+  #dragPointerId = null;
+
+  #dragPointerType = "";
+
   #keepAspectRatio = false;
 
   #resizersDiv = null;
+
+  #lastPointerCoords = null;
 
   #savedDimensions = null;
 
@@ -187,6 +193,10 @@ class AnnotationEditor {
 
   get editorType() {
     return Object.getPrototypeOf(this).constructor._type;
+  }
+
+  static get isDrawer() {
+    return false;
   }
 
   static get _defaultLineColor() {
@@ -452,6 +462,8 @@ class AnnotationEditor {
     this.x += x / width;
     this.y += y / height;
 
+    this._onTranslating(this.x, this.y);
+
     this.fixAndSetPosition();
   }
 
@@ -480,7 +492,10 @@ class AnnotationEditor {
 
   drag(tx, ty) {
     this.#initialPosition ||= [this.x, this.y];
-    const [parentWidth, parentHeight] = this.parentDimensions;
+    const {
+      div,
+      parentDimensions: [parentWidth, parentHeight],
+    } = this;
     this.x += tx / parentWidth;
     this.y += ty / parentHeight;
     if (this.parent && (this.x < 0 || this.x > 1 || this.y < 0 || this.y > 1)) {
@@ -507,10 +522,28 @@ class AnnotationEditor {
     x += bx;
     y += by;
 
-    this.div.style.left = `${(100 * x).toFixed(2)}%`;
-    this.div.style.top = `${(100 * y).toFixed(2)}%`;
-    this.div.scrollIntoView({ block: "nearest" });
+    const { style } = div;
+    style.left = `${(100 * x).toFixed(2)}%`;
+    style.top = `${(100 * y).toFixed(2)}%`;
+
+    this._onTranslating(x, y);
+
+    div.scrollIntoView({ block: "nearest" });
   }
+
+  /**
+   * Called when the editor is being translated.
+   * @param {number} x - in page coordinates.
+   * @param {number} y - in page coordinates.
+   */
+  _onTranslating(x, y) {}
+
+  /**
+   * Called when the editor has been translated.
+   * @param {number} x - in page coordinates.
+   * @param {number} y - in page coordinates.
+   */
+  _onTranslated(x, y) {}
 
   get _hasBeenMoved() {
     return (
@@ -557,7 +590,10 @@ class AnnotationEditor {
    * @param {number} [rotation] - the rotation of the page.
    */
   fixAndSetPosition(rotation = this.rotation) {
-    const [pageWidth, pageHeight] = this.pageDimensions;
+    const {
+      div: { style },
+      pageDimensions: [pageWidth, pageHeight],
+    } = this;
     let { x, y, width, height } = this;
     width *= pageWidth;
     height *= pageHeight;
@@ -592,7 +628,6 @@ class AnnotationEditor {
     x += bx;
     y += by;
 
-    const { style } = this.div;
     style.left = `${(100 * x).toFixed(2)}%`;
     style.top = `${(100 * y).toFixed(2)}%`;
 
@@ -670,9 +705,10 @@ class AnnotationEditor {
    */
   setDims(width, height) {
     const [parentWidth, parentHeight] = this.parentDimensions;
-    this.div.style.width = `${((100 * width) / parentWidth).toFixed(2)}%`;
+    const { style } = this.div;
+    style.width = `${((100 * width) / parentWidth).toFixed(2)}%`;
     if (!this.#keepAspectRatio) {
-      this.div.style.height = `${((100 * height) / parentHeight).toFixed(2)}%`;
+      style.height = `${((100 * height) / parentHeight).toFixed(2)}%`;
     }
   }
 
@@ -690,9 +726,7 @@ class AnnotationEditor {
       style.width = `${((100 * parseFloat(width)) / parentWidth).toFixed(2)}%`;
     }
     if (!this.#keepAspectRatio && !heightPercent) {
-      style.height = `${((100 * parseFloat(height)) / parentHeight).toFixed(
-        2
-      )}%`;
+      style.height = `${((100 * parseFloat(height)) / parentHeight).toFixed(2)}%`;
     }
   }
 
@@ -753,6 +787,7 @@ class AnnotationEditor {
 
     const savedDraggable = this._isDraggable;
     this._isDraggable = false;
+    this.#lastPointerCoords = [event.screenX, event.screenY];
 
     const ac = new AbortController();
     const signal = this._uiManager.combinedSignal(ac);
@@ -763,11 +798,18 @@ class AnnotationEditor {
       this.#resizerPointermove.bind(this, name),
       { passive: true, capture: true, signal }
     );
+    window.addEventListener(
+      "touchmove",
+      stopEvent /* Prevent the page from scrolling */,
+      { passive: false, signal }
+    );
     window.addEventListener("contextmenu", noContextMenu, { signal });
-    const savedX = this.x;
-    const savedY = this.y;
-    const savedWidth = this.width;
-    const savedHeight = this.height;
+    this.#savedDimensions = {
+      savedX: this.x,
+      savedY: this.y,
+      savedWidth: this.width,
+      savedHeight: this.height,
+    };
     const savedParentCursor = this.parent.div.style.cursor;
     const savedCursor = this.div.style.cursor;
     this.div.style.cursor = this.parent.div.style.cursor =
@@ -781,7 +823,7 @@ class AnnotationEditor {
       this.parent.div.style.cursor = savedParentCursor;
       this.div.style.cursor = savedCursor;
 
-      this.#addResizeToUndoStack(savedX, savedY, savedWidth, savedHeight);
+      this.#addResizeToUndoStack();
     };
     window.addEventListener("pointerup", pointerUpCallback, { signal });
     // If the user switches to another window (with alt+tab), then we end the
@@ -789,7 +831,29 @@ class AnnotationEditor {
     window.addEventListener("blur", pointerUpCallback, { signal });
   }
 
-  #addResizeToUndoStack(savedX, savedY, savedWidth, savedHeight) {
+  #resize(x, y, width, height) {
+    this.width = width;
+    this.height = height;
+    this.x = x;
+    this.y = y;
+    const [parentWidth, parentHeight] = this.parentDimensions;
+    this.setDims(parentWidth * width, parentHeight * height);
+    this.fixAndSetPosition();
+    this._onResized();
+  }
+
+  /**
+   * Called when the editor has been resized.
+   */
+  _onResized() {}
+
+  #addResizeToUndoStack() {
+    if (!this.#savedDimensions) {
+      return;
+    }
+    const { savedX, savedY, savedWidth, savedHeight } = this.#savedDimensions;
+    this.#savedDimensions = null;
+
     const newX = this.x;
     const newY = this.y;
     const newWidth = this.width;
@@ -818,24 +882,8 @@ class AnnotationEditor {
     // #2256 end of modification by ngx-extended-pdf-viewer
 
     this.addCommands({
-      cmd: () => {
-        this.width = newWidth;
-        this.height = newHeight;
-        this.x = newX;
-        this.y = newY;
-        const [parentWidth, parentHeight] = this.parentDimensions;
-        this.setDims(parentWidth * newWidth, parentHeight * newHeight);
-        this.fixAndSetPosition();
-      },
-      undo: () => {
-        this.width = savedWidth;
-        this.height = savedHeight;
-        this.x = savedX;
-        this.y = savedY;
-        const [parentWidth, parentHeight] = this.parentDimensions;
-        this.setDims(parentWidth * savedWidth, parentHeight * savedHeight);
-        this.fixAndSetPosition();
-      },
+      cmd: this.#resize.bind(this, newX, newY, newWidth, newHeight),
+      undo: this.#resize.bind(this, savedX, savedY, savedWidth, savedHeight),
       mustExec: true,
     });
   }
@@ -917,10 +965,23 @@ class AnnotationEditor {
     let ratioX = 1;
     let ratioY = 1;
 
-    let [deltaX, deltaY] = this.screenToPageTranslation(
-      event.movementX,
-      event.movementY
-    );
+    let deltaX, deltaY;
+
+    if (!event.fromKeyboard) {
+      // We can't use event.movementX/Y because they're not reliable:
+      //  https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/movementX
+      // (it was buggy on a laptop with a touch screen).
+      const { screenX, screenY } = event;
+      const [lastScreenX, lastScreenY] = this.#lastPointerCoords;
+      [deltaX, deltaY] = this.screenToPageTranslation(
+        screenX - lastScreenX,
+        screenY - lastScreenY
+      );
+      this.#lastPointerCoords[0] = screenX;
+      this.#lastPointerCoords[1] = screenY;
+    } else {
+      ({ deltaX, deltaY } = event);
+    }
     [deltaX, deltaY] = invTransf(deltaX / parentWidth, deltaY / parentHeight);
 
     if (isDiagonal) {
@@ -966,7 +1027,14 @@ class AnnotationEditor {
 
     this.setDims(parentWidth * newWidth, parentHeight * newHeight);
     this.fixAndSetPosition();
+
+    this._onResizing();
   }
+
+  /**
+   * Called when the editor is being resized.
+   */
+  _onResizing() {}
 
   /**
    * Called when the alt text dialog is closed.
@@ -1154,38 +1222,70 @@ class AnnotationEditor {
 
     const ac = new AbortController();
     const signal = this._uiManager.combinedSignal(ac);
-
-    if (isSelected) {
-      this.div.classList.add("moving");
-      this.#prevDragX = event.clientX;
-      this.#prevDragY = event.clientY;
-      const pointerMoveCallback = e => {
-        const { clientX: x, clientY: y } = e;
-        const [tx, ty] = this.screenToPageTranslation(
-          x - this.#prevDragX,
-          y - this.#prevDragY
-        );
-        this.#prevDragX = x;
-        this.#prevDragY = y;
-        this._uiManager.dragSelectedEditors(tx, ty);
-      };
-      window.addEventListener("pointermove", pointerMoveCallback, {
-        passive: true,
-        capture: true,
-        signal,
-      });
-    }
-
-    const pointerUpCallback = () => {
+    const opts = { capture: true, passive: false, signal };
+    const cancelDrag = e => {
       ac.abort();
-      if (isSelected) {
-        this.div.classList.remove("moving");
-      }
 
+      this.#dragPointerId = null;
       this.#hasBeenClicked = false;
       if (!this._uiManager.endDragSession()) {
-        this.#selectOnPointerEvent(event);
+        this.#selectOnPointerEvent(e);
       }
+    };
+
+    if (isSelected) {
+      this.#prevDragX = event.clientX;
+      this.#prevDragY = event.clientY;
+      this.#dragPointerId = event.pointerId;
+      this.#dragPointerType = event.pointerType;
+      window.addEventListener(
+        "pointermove",
+        e => {
+          const { clientX: x, clientY: y, pointerId } = e;
+          if (pointerId !== this.#dragPointerId) {
+            stopEvent(e);
+            return;
+          }
+          const [tx, ty] = this.screenToPageTranslation(
+            x - this.#prevDragX,
+            y - this.#prevDragY
+          );
+          this.#prevDragX = x;
+          this.#prevDragY = y;
+          this._uiManager.dragSelectedEditors(tx, ty);
+        },
+        opts
+      );
+      window.addEventListener(
+        "touchmove",
+        stopEvent /* Prevent the page from scrolling */,
+        opts
+      );
+      window.addEventListener(
+        "pointerdown",
+        // If the user drags with one finger and then clicks with another.
+        e => {
+          if (e.isPrimary && e.pointerType === this.#dragPointerType) {
+            // We cannot have two primaries at the same time.
+            // It's possible to be in this state with Firefox and Gnome when
+            // trying to drag with three fingers (see bug 1933716).
+            cancelDrag(e);
+          }
+          stopEvent(e);
+        },
+        opts
+      );
+    }
+
+    this._onStartDragging();
+
+    const pointerUpCallback = e => {
+      if (!this.#dragPointerId || this.#dragPointerId === e.pointerId) {
+        cancelDrag(e);
+        this._onStopDragging();
+        return;
+      }
+      stopEvent(e);
     };
     window.addEventListener("pointerup", pointerUpCallback, { signal });
     // If the user is using alt+tab during the dragging session, the pointerup
@@ -1193,6 +1293,10 @@ class AnnotationEditor {
     // order to interrupt the dragging session.
     window.addEventListener("blur", pointerUpCallback, { signal });
   }
+
+  _onStartDragging() {}
+
+  _onStopDragging() {}
 
   moveInDOM() {
     // Moving the editor in the DOM can be expensive, so we wait a bit before.
@@ -1212,6 +1316,7 @@ class AnnotationEditor {
     this.x = x;
     this.y = y;
     this.fixAndSetPosition();
+    this._onTranslated();
   }
 
   /**
@@ -1359,10 +1464,15 @@ class AnnotationEditor {
   }
 
   /**
-   * Rotate the editor.
+   * Rotate the editor when the page is rotated.
    * @param {number} angle
    */
   rotate(_angle) {}
+
+  /**
+   * Resize the editor when the page is resized.
+   */
+  resize() {}
 
   /**
    * Serialize the editor when it has been deleted.
@@ -1610,19 +1720,16 @@ class AnnotationEditor {
       return;
     }
     this.#resizerPointermove(this.#focusedResizerName, {
-      movementX: x,
-      movementY: y,
+      deltaX: x,
+      deltaY: y,
+      fromKeyboard: true,
     });
   }
 
   #stopResizing() {
     this.#isResizerEnabledForKeyboard = false;
     this.#setResizerTabIndex(-1);
-    if (this.#savedDimensions) {
-      const { savedX, savedY, savedWidth, savedHeight } = this.#savedDimensions;
-      this.#addResizeToUndoStack(savedX, savedY, savedWidth, savedHeight);
-      this.#savedDimensions = null;
-    }
+    this.#addResizeToUndoStack();
   }
 
   _stopResizingWithKeyboard() {

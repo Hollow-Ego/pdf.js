@@ -72,9 +72,9 @@ class AnnotationEditorLayer {
 
   #hadPointerDown = false;
 
-  #isCleaningUp = false;
-
   #isDisabling = false;
+
+  #drawingAC = null;
 
   #textLayer = null;
 
@@ -162,12 +162,9 @@ class AnnotationEditorLayer {
         this.disableClick();
         return;
       case AnnotationEditorType.INK:
-        // We always want to have an ink editor ready to draw in.
-        this.addInkEditorIfNeeded(false);
-
         this.disableTextSelection();
         this.togglePointerEvents(true);
-        this.disableClick();
+        this.enableClick();
         break;
       case AnnotationEditorType.HIGHLIGHT:
         this.enableTextSelection();
@@ -195,30 +192,6 @@ class AnnotationEditorLayer {
     return textLayer === this.#textLayer?.div;
   }
 
-  addInkEditorIfNeeded(isCommitting) {
-    if (this.#uiManager.getMode() !== AnnotationEditorType.INK) {
-      // We don't want to add an ink editor if we're not in ink mode!
-      return;
-    }
-
-    if (!isCommitting) {
-      // We're removing an editor but an empty one can already exist so in this
-      // case we don't need to create a new one.
-      for (const editor of this.#editors.values()) {
-        if (editor.isEmpty()) {
-          editor.setInBackground();
-          return;
-        }
-      }
-    }
-
-    const editor = this.createAndAddNewEditor(
-      { offsetX: 0, offsetY: 0 },
-      /* isCentered = */ false
-    );
-    editor.setInBackground();
-  }
-
   /**
    * Set the editing state.
    * @param {boolean} isEditing
@@ -233,6 +206,10 @@ class AnnotationEditorLayer {
    */
   addCommands(params) {
     this.#uiManager.addCommands(params);
+  }
+
+  cleanUndoStack(type) {
+    this.#uiManager.cleanUndoStack(type);
   }
 
   toggleDrawing(enabled = false) {
@@ -484,10 +461,6 @@ class AnnotationEditorLayer {
     this.#uiManager.removeEditor(editor);
     editor.div.remove();
     editor.isAttachedToDOM = false;
-
-    if (!this.#isCleaningUp) {
-      this.addInkEditorIfNeeded(/* isCommitting = */ false);
-    }
   }
 
   /**
@@ -769,6 +742,13 @@ class AnnotationEditorLayer {
     }
     this.#hadPointerDown = false;
 
+    if (
+      this.#currentEditorType?.isDrawer &&
+      this.#currentEditorType.supportMultipleDrawings
+    ) {
+      return;
+    }
+
     if (!this.#allowClick) {
       this.#allowClick = true;
       return;
@@ -811,8 +791,46 @@ class AnnotationEditorLayer {
 
     this.#hadPointerDown = true;
 
+    if (this.#currentEditorType?.isDrawer) {
+      this.startDrawingSession(event);
+      return;
+    }
+
     const editor = this.#uiManager.getActive();
     this.#allowClick = !editor || editor.isEmpty();
+  }
+
+  startDrawingSession(event) {
+    this.div.focus();
+    if (this.#drawingAC) {
+      this.#currentEditorType.startDrawing(this, this.#uiManager, false, event);
+      return;
+    }
+
+    this.#uiManager.unselectAll();
+    this.#drawingAC = new AbortController();
+    const signal = this.#uiManager.combinedSignal(this.#drawingAC);
+    this.div.addEventListener(
+      "blur",
+      ({ relatedTarget }) => {
+        if (relatedTarget && !this.div.contains(relatedTarget)) {
+          this.commitOrRemove();
+        }
+      },
+      { signal }
+    );
+    this.#uiManager.disableUserSelect(true);
+    this.#currentEditorType.startDrawing(this, this.#uiManager, false, event);
+  }
+
+  endDrawingSession(isAborted = false) {
+    if (!this.#drawingAC) {
+      return null;
+    }
+    this.#drawingAC.abort();
+    this.#drawingAC = null;
+    this.#uiManager.disableUserSelect(false);
+    return this.#currentEditorType.endDrawing(isAborted);
   }
 
   /**
@@ -831,10 +849,26 @@ class AnnotationEditorLayer {
     return true;
   }
 
+  commitOrRemove() {
+    if (this.#drawingAC) {
+      this.endDrawingSession();
+      return true;
+    }
+    return false;
+  }
+
+  onScaleChanging() {
+    if (!this.#drawingAC) {
+      return;
+    }
+    this.#currentEditorType.onScaleChangingWhenDrawing(this);
+  }
+
   /**
    * Destroy the main editor.
    */
   destroy() {
+    this.commitOrRemove();
     if (this.#uiManager.getActive()?.parent === this) {
       // We need to commit the current editor before destroying the layer.
       this.#uiManager.commitOrRemove();
@@ -861,13 +895,11 @@ class AnnotationEditorLayer {
     // When we're cleaning up, some editors are removed but we don't want
     // to add a new one which will induce an addition in this.#editors, hence
     // an infinite loop.
-    this.#isCleaningUp = true;
     for (const editor of this.#editors.values()) {
       if (editor.isEmpty()) {
         editor.remove();
       }
     }
-    this.#isCleaningUp = false;
   }
 
   /**
@@ -899,6 +931,7 @@ class AnnotationEditorLayer {
 
     const oldRotation = this.viewport.rotation;
     const rotation = viewport.rotation;
+
     this.viewport = viewport;
     setLayerDimensions(this.div, { rotation });
     if (oldRotation !== rotation) {
@@ -906,7 +939,6 @@ class AnnotationEditorLayer {
         editor.rotate(rotation);
       }
     }
-    this.addInkEditorIfNeeded(/* isCommitting = */ false);
   }
 
   /**
@@ -921,12 +953,6 @@ class AnnotationEditorLayer {
   get scale() {
     return this.#uiManager.viewParameters.realScale;
   }
-
-  // #1825 modified by ngx-extended-pdf-viewer
-  setCleaningUp(isCleaningUp) {
-    this.#isCleaningUp = isCleaningUp;
-  }
-  // #1825 end of modification by ngx-extended-pdf-viewer
 }
 
 export { AnnotationEditorLayer };

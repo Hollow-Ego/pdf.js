@@ -309,9 +309,11 @@ async function waitForEvent({
 
   const success = await awaitPromise(handle);
   if (success === null) {
-    console.log(`waitForEvent: ${eventName} didn't trigger within the timeout`);
+    console.warn(
+      `waitForEvent: ${eventName} didn't trigger within the timeout`
+    );
   } else if (!success) {
-    console.log(`waitForEvent: ${eventName} triggered, but validation failed`);
+    console.warn(`waitForEvent: ${eventName} triggered, but validation failed`);
   }
 }
 
@@ -325,9 +327,18 @@ async function waitForStorageEntries(page, nEntries) {
 
 async function waitForSerialized(page, nEntries) {
   return page.waitForFunction(
-    n =>
-      (window.PDFViewerApplication.pdfDocument.annotationStorage.serializable
-        .map?.size ?? 0) === n,
+    n => {
+      try {
+        return (
+          (window.PDFViewerApplication.pdfDocument.annotationStorage
+            .serializable.map?.size ?? 0) === n
+        );
+      } catch {
+        // When serializing a stamp annotation with a SVG, the transfer
+        // can fail because of the SVG, so we just retry.
+        return false;
+      }
+    },
     {},
     nEntries
   );
@@ -762,6 +773,14 @@ async function switchToEditor(name, page, disable = false) {
   await awaitPromise(modeChangedHandle);
 }
 
+function waitForNoElement(page, selector) {
+  return page.waitForFunction(
+    sel => !document.querySelector(sel),
+    {},
+    selector
+  );
+}
+
 export {
   applyFunctionToEditor,
   awaitPromise,
@@ -815,6 +834,7 @@ export {
   waitForAnnotationModeChanged,
   waitForEntryInStorage,
   waitForEvent,
+  waitForNoElement,
   waitForPageRendered,
   waitForSandboxTrip,
   waitForSelectedEditor,

@@ -61,6 +61,7 @@ import {
   PixelsPerInch,
   RenderingCancelledException,
   setLayerDimensions,
+  stopEvent,
 } from "./display/display_utils.js";
 import { AnnotationEditorLayer } from "./display/editor/annotation_editor_layer.js";
 import { AnnotationEditorUIManager } from "./display/editor/tools.js";
@@ -80,7 +81,7 @@ const pdfjsVersion =
 const pdfjsBuild =
   typeof PDFJSDev !== "undefined" ? PDFJSDev.eval("BUNDLE_BUILD") : void 0;
 
-if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
+if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING || GENERIC")) {
   globalThis.pdfjsTestingUtils = {
     HighlightOutliner,
   };
@@ -124,6 +125,7 @@ export {
   RenderingCancelledException,
   setLayerDimensions,
   shadow,
+  stopEvent,
   TextLayer,
   UnexpectedResponseException,
   Util,

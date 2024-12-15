@@ -193,7 +193,7 @@ function normalize(text) {
   }
 
   let normalized = text.normalize("NFD");
-  const positions = [[0, 0]];
+  const positions = [0, 0];
   let rawDiacriticsIndex = 0;
   let syllableIndex = 0;
   let shift = 0;
@@ -210,7 +210,7 @@ function normalize(text) {
         const replacement = CHARACTERS_TO_NORMALIZE[p1];
         const jj = replacement.length;
         for (let j = 1; j < jj; j++) {
-          positions.push([i - shift + j, shift - j]);
+          positions.push(i - shift + j, shift - j);
         }
         shift -= jj - 1;
         return replacement;
@@ -225,7 +225,7 @@ function normalize(text) {
         }
         const jj = replacement.length;
         for (let j = 1; j < jj; j++) {
-          positions.push([i - shift + j, shift - j]);
+          positions.push(i - shift + j, shift - j);
         }
         shift -= jj - 1;
         return replacement;
@@ -242,13 +242,13 @@ function normalize(text) {
         } else {
           // i is the position of the first diacritic
           // so (i - 1) is the position for the letter before.
-          positions.push([i - 1 - shift + 1, shift - 1]);
+          positions.push(i - 1 - shift + 1, shift - 1);
           shift -= 1;
           shiftOrigin += 1;
         }
 
         // End-of-line.
-        positions.push([i - shift + 1, shift]);
+        positions.push(i - shift + 1, shift);
         shiftOrigin += 1;
         eol += 1;
 
@@ -270,7 +270,7 @@ function normalize(text) {
         for (let j = 1; j <= jj; j++) {
           // i is the position of the first diacritic
           // so (i - 1) is the position for the letter before.
-          positions.push([i - 1 - shift + j, shift - j]);
+          positions.push(i - 1 - shift + j, shift - j);
         }
         shift -= jj;
         shiftOrigin += jj;
@@ -279,7 +279,7 @@ function normalize(text) {
           // Diacritics are followed by a -\n.
           // See comments in `if (p6)` block.
           i += len - 1;
-          positions.push([i - shift + 1, 1 + shift]);
+          positions.push(i - shift + 1, 1 + shift);
           shift += 1;
           shiftOrigin += 1;
           eol += 1;
@@ -291,8 +291,7 @@ function normalize(text) {
 
       if (p5) {
         // Compound word with a line break after the hyphen.
-        positions.push([i - shift + 3, 1 + shift]);
-        shift += 1;
+        // Since the \n isn't in the original text, o = 3 and n = 3.
         shiftOrigin += 1;
         eol += 1;
         return p5.replace("\n", "");
@@ -306,7 +305,7 @@ function normalize(text) {
         // The \n isn't in the original text so here y = i, n = X.len - 2 and
         // o = X.len - 1.
         const len = p6.length - 2;
-        positions.push([i - shift + len, 1 + shift]);
+        positions.push(i - shift + len, 1 + shift);
         shift += 1;
         shiftOrigin += 1;
         eol += 1;
@@ -318,7 +317,7 @@ function normalize(text) {
         // white space.
         // A CJK can be encoded in UTF-32, hence their length isn't always 1.
         const len = p7.length - 1;
-        positions.push([i - shift + len, shift]);
+        positions.push(i - shift + len, shift);
         shiftOrigin += 1;
         eol += 1;
         return p7.slice(0, -1);
@@ -327,7 +326,7 @@ function normalize(text) {
       if (p8) {
         // eol is replaced by space: "foo\nbar" is likely equivalent to
         // "foo bar".
-        positions.push([i - shift + 1, shift - 1]);
+        positions.push(i - shift + 1, shift - 1);
         shift -= 1;
         shiftOrigin += 1;
         eol += 1;
@@ -341,7 +340,7 @@ function normalize(text) {
         const newCharLen = syllablePositions[syllableIndex][0] - 1;
         ++syllableIndex;
         for (let j = 1; j <= newCharLen; j++) {
-          positions.push([i - (shift - j), shift - j]);
+          positions.push(i - (shift - j), shift - j);
         }
         shift -= newCharLen;
         shiftOrigin += newCharLen;
@@ -350,9 +349,15 @@ function normalize(text) {
     }
   );
 
-  positions.push([normalized.length, shift]);
+  positions.push(normalized.length, shift);
+  const starts = new Uint32Array(positions.length >> 1);
+  const shifts = new Int32Array(positions.length >> 1);
+  for (let i = 0, ii = positions.length; i < ii; i += 2) {
+    starts[i >> 1] = positions[i];
+    shifts[i >> 1] = positions[i + 1];
+  }
 
-  return [normalized, positions, hasDiacritics];
+  return [normalized, [starts, shifts], hasDiacritics];
 }
 
 // Determine the original, non-normalized, match index such that highlighting of
@@ -363,25 +368,26 @@ function getOriginalIndex(diffs, pos, len) {
     return [pos, len];
   }
 
+  const [starts, shifts] = diffs;
   // First char in the new string.
   const start = pos;
   // Last char in the new string.
   const end = pos + len - 1;
-  let i = binarySearchFirstItem(diffs, x => x[0] >= start);
-  if (diffs[i][0] > start) {
+  let i = binarySearchFirstItem(starts, x => x >= start);
+  if (starts[i] > start) {
     --i;
   }
 
-  let j = binarySearchFirstItem(diffs, x => x[0] >= end, i);
-  if (diffs[j][0] > end) {
+  let j = binarySearchFirstItem(starts, x => x >= end, i);
+  if (starts[j] > end) {
     --j;
   }
 
   // First char in the old string.
-  const oldStart = start + diffs[i][1];
+  const oldStart = start + shifts[i];
 
   // Last char in the old string.
-  const oldEnd = end + diffs[j][1];
+  const oldEnd = end + shifts[j];
   const oldLen = oldEnd + 1 - oldStart;
 
   return [oldStart, oldLen];
