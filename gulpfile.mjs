@@ -195,6 +195,8 @@ function createWebpackAlias(defines) {
     // end of modification by ngx-extended-pdf-viewer
   };
   const libraryAlias = {
+    "display-cmap_reader_factory": "src/display/stubs.js",
+    "display-standard_fontdata_factory": "src/display/stubs.js",
     "display-fetch_stream": "src/display/stubs.js",
     "display-network": "src/display/stubs.js",
     "display-node_stream": "src/display/stubs.js",
@@ -223,6 +225,10 @@ function createWebpackAlias(defines) {
   };
 
   if (defines.CHROME) {
+    libraryAlias["display-cmap_reader_factory"] =
+      "src/display/cmap_reader_factory.js";
+    libraryAlias["display-standard_fontdata_factory"] =
+      "src/display/standard_fontdata_factory.js";
     libraryAlias["display-fetch_stream"] = "src/display/fetch_stream.js";
     libraryAlias["display-network"] = "src/display/network.js";
 
@@ -235,6 +241,10 @@ function createWebpackAlias(defines) {
     // Aliases defined here must also be replicated in the paths section of
     // the tsconfig.json file for the type generation to work.
     // In the tsconfig.json files, the .js extension must be omitted.
+    libraryAlias["display-cmap_reader_factory"] =
+      "src/display/cmap_reader_factory.js";
+    libraryAlias["display-standard_fontdata_factory"] =
+      "src/display/standard_fontdata_factory.js";
     libraryAlias["display-fetch_stream"] = "src/display/fetch_stream.js";
     libraryAlias["display-network"] = "src/display/network.js";
     libraryAlias["display-node_stream"] = "src/display/node_stream.js";
@@ -693,6 +703,13 @@ function runTests(testsName, { bot = false, xfaOnly = false } = {}) {
           args.push("--xfaOnly");
         }
         args.push("--manifestFile=" + PDF_TEST);
+        collectArgs(
+          {
+            names: ["-t", "--testfilter"],
+            hasValue: true,
+          },
+          args
+        );
         break;
       case "unit":
         args.push("--unitTest");
@@ -730,6 +747,28 @@ function runTests(testsName, { bot = false, xfaOnly = false } = {}) {
   });
 }
 
+function collectArgs(options, args) {
+  if (!Array.isArray(options)) {
+    options = [options];
+  }
+  for (let i = 0, ii = process.argv.length; i < ii; i++) {
+    const arg = process.argv[i];
+    const option = options.find(opt => opt.names.includes(arg));
+    if (!option) {
+      continue;
+    }
+    if (!option.hasValue) {
+      args.push(arg);
+      continue;
+    }
+    const next = process.argv[i + 1];
+    if (next && !next.startsWith("-")) {
+      args.push(arg, next);
+      i += 1;
+    }
+  }
+}
+
 function makeRef(done, bot) {
   console.log();
   console.log("### Creating reference images");
@@ -754,6 +793,13 @@ function makeRef(done, bot) {
   if (process.argv.includes("--headless")) {
     args.push("--headless");
   }
+  collectArgs(
+    {
+      names: ["-t", "--testfilter"],
+      hasValue: true,
+    },
+    args
+  );
 
   const testProcess = startNode(args, { cwd: TEST_DIR, stdio: "inherit" });
   testProcess.on("close", function (code) {
@@ -1566,6 +1612,8 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
     defines: bundleDefines,
     map: {
       "pdfjs-lib": "../pdf.js",
+      "display-cmap_reader_factory": "./cmap_reader_factory.js",
+      "display-standard_fontdata_factory": "./standard_fontdata_factory.js",
       "display-fetch_stream": "./fetch_stream.js",
       "display-network": "./network.js",
       "display-node_stream": "./node_stream.js",
@@ -2240,7 +2288,7 @@ function packageJson() {
     bugs: DIST_BUGS_URL,
     license: DIST_LICENSE,
     optionalDependencies: {
-      canvas: "^2.11.2",
+      canvas: "^3.0.0-rc2",
       path2d: "^0.2.1",
     },
     browser: {

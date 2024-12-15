@@ -21,6 +21,7 @@ import {
   AbortException,
   AnnotationMode,
   assert,
+  FeatureTest,
   getVerbosityLevel,
   info,
   InvalidPDFException,
@@ -44,10 +45,6 @@ import {
 } from "./annotation_storage.js";
 import {
   deprecated,
-  DOMCanvasFactory,
-  DOMCMapReaderFactory,
-  DOMFilterFactory,
-  DOMStandardFontDataFactory,
   isDataScheme,
   isValidFetchUrl,
   PageViewport,
@@ -63,6 +60,10 @@ import {
   NodeStandardFontDataFactory,
 } from "display-node_utils";
 import { CanvasGraphics } from "./canvas.js";
+import { DOMCanvasFactory } from "./canvas_factory.js";
+import { DOMCMapReaderFactory } from "display-cmap_reader_factory";
+import { DOMFilterFactory } from "./filter_factory.js";
+import { DOMStandardFontDataFactory } from "display-standard_fontdata_factory";
 import { GlobalWorkerOptions } from "./worker_options.js";
 import { MessageHandler } from "../shared/message_handler.js";
 import { Metadata } from "./metadata.js";
@@ -177,6 +178,9 @@ const DefaultStandardFontDataFactory =
  *   `OffscreenCanvas` in the worker. Primarily used to improve performance of
  *   image conversion/rendering.
  *   The default value is `true` in web environments and `false` in Node.js.
+ * @property {boolean} [isChrome] - Determines if we can use bmp ImageDecoder.
+ *   NOTE: Temporary option until [https://issues.chromium.org/issues/374807001]
+ *   is fixed.
  * @property {number} [canvasMaxAreaInBytes] - The integer value is used to
  *   know when an image must be resized (uses `OffscreenCanvas` in the worker).
  *   If it's -1 then a possibly slow algorithm is used to guess the max value.
@@ -290,6 +294,13 @@ function getDocument(src = {}) {
     typeof src.isOffscreenCanvasSupported === "boolean"
       ? src.isOffscreenCanvasSupported
       : !isNodeJS;
+  const isChrome =
+    typeof src.isChrome === "boolean"
+      ? src.isChrome
+      : (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) &&
+        !FeatureTest.platform.isFirefox &&
+        typeof window !== "undefined" &&
+        !!window?.chrome;
   const canvasMaxAreaInBytes = Number.isInteger(src.canvasMaxAreaInBytes)
     ? src.canvasMaxAreaInBytes
     : -1;
@@ -395,6 +406,7 @@ function getDocument(src = {}) {
       ignoreErrors,
       isEvalSupported,
       isOffscreenCanvasSupported,
+      isChrome,
       canvasMaxAreaInBytes,
       fontExtraProperties,
       useSystemFonts,
@@ -1999,7 +2011,7 @@ class PDFPageProxy {
 }
 
 class LoopbackPort {
-  #listeners = new Set();
+  #listeners = new Map();
 
   #deferred = Promise.resolve();
 
@@ -2009,21 +2021,39 @@ class LoopbackPort {
     };
 
     this.#deferred.then(() => {
-      for (const listener of this.#listeners) {
+      for (const [listener] of this.#listeners) {
         listener.call(this, event);
       }
     });
   }
 
-  addEventListener(name, listener) {
-    this.#listeners.add(listener);
+  addEventListener(name, listener, options = null) {
+    let rmAbort = null;
+    if (options?.signal instanceof AbortSignal) {
+      const { signal } = options;
+      if (signal.aborted) {
+        warn("LoopbackPort - cannot use an `aborted` signal.");
+        return;
+      }
+      const onAbort = () => this.removeEventListener(name, listener);
+      rmAbort = () => signal.removeEventListener("abort", onAbort);
+
+      signal.addEventListener("abort", onAbort);
+    }
+    this.#listeners.set(listener, rmAbort);
   }
 
   removeEventListener(name, listener) {
+    const rmAbort = this.#listeners.get(listener);
+    rmAbort?.();
+
     this.#listeners.delete(listener);
   }
 
   terminate() {
+    for (const [, rmAbort] of this.#listeners) {
+      rmAbort?.();
+    }
     this.#listeners.clear();
   }
 }
@@ -2634,32 +2664,27 @@ class WorkerTransport {
       };
     });
 
-    messageHandler.on("ReaderHeadersReady", data => {
-      const headersCapability = Promise.withResolvers();
-      const fullReader = this._fullReader;
-      fullReader.headersReady.then(() => {
-        // If stream or range are disabled, it's our only way to report
-        // loading progress.
-        if (!fullReader.isStreamingSupported || !fullReader.isRangeSupported) {
-          if (this._lastProgress) {
-            loadingTask.onProgress?.(this._lastProgress);
-          }
-          fullReader.onProgress = evt => {
-            loadingTask.onProgress?.({
-              loaded: evt.loaded,
-              total: evt.total,
-            });
-          };
+    messageHandler.on("ReaderHeadersReady", async data => {
+      await this._fullReader.headersReady;
+
+      const { isStreamingSupported, isRangeSupported, contentLength } =
+        this._fullReader;
+
+      // If stream or range are disabled, it's our only way to report
+      // loading progress.
+      if (!isStreamingSupported || !isRangeSupported) {
+        if (this._lastProgress) {
+          loadingTask.onProgress?.(this._lastProgress);
         }
+        this._fullReader.onProgress = evt => {
+          loadingTask.onProgress?.({
+            loaded: evt.loaded,
+            total: evt.total,
+          });
+        };
+      }
 
-        headersCapability.resolve({
-          isStreamingSupported: fullReader.isStreamingSupported,
-          isRangeSupported: fullReader.isRangeSupported,
-          contentLength: fullReader.contentLength,
-        });
-      }, headersCapability.reject);
-
-      return headersCapability.promise;
+      return { isStreamingSupported, isRangeSupported, contentLength };
     });
 
     messageHandler.on("GetRangeReader", (data, sink) => {
@@ -2909,29 +2934,31 @@ class WorkerTransport {
       });
     });
 
-    messageHandler.on("FetchBuiltInCMap", data => {
+    messageHandler.on("FetchBuiltInCMap", async data => {
+      if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
+        throw new Error("Not implemented: FetchBuiltInCMap");
+      }
       if (this.destroyed) {
-        return Promise.reject(new Error("Worker was destroyed."));
+        throw new Error("Worker was destroyed.");
       }
       if (!this.cMapReaderFactory) {
-        return Promise.reject(
-          new Error(
-            "CMapReaderFactory not initialized, see the `useWorkerFetch` parameter."
-          )
+        throw new Error(
+          "CMapReaderFactory not initialized, see the `useWorkerFetch` parameter."
         );
       }
       return this.cMapReaderFactory.fetch(data);
     });
 
-    messageHandler.on("FetchStandardFontData", data => {
+    messageHandler.on("FetchStandardFontData", async data => {
+      if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
+        throw new Error("Not implemented: FetchStandardFontData");
+      }
       if (this.destroyed) {
-        return Promise.reject(new Error("Worker was destroyed."));
+        throw new Error("Worker was destroyed.");
       }
       if (!this.standardFontDataFactory) {
-        return Promise.reject(
-          new Error(
-            "StandardFontDataFactory not initialized, see the `useWorkerFetch` parameter."
-          )
+        throw new Error(
+          "StandardFontDataFactory not initialized, see the `useWorkerFetch` parameter."
         );
       }
       return this.standardFontDataFactory.fetch(data);

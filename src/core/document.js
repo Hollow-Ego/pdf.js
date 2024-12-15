@@ -26,6 +26,7 @@ import {
   stringToBytes,
   stringToPDFString,
   stringToUTF8String,
+  toHexUtil,
   unreachable,
   Util,
   warn,
@@ -706,7 +707,7 @@ class Page {
     const structTree = await this.pdfManager.ensure(this, "_parseStructTree", [
       structTreeRoot,
     ]);
-    return structTree.serializable;
+    return this.pdfManager.ensure(structTree, "serializable");
   }
 
   /**
@@ -861,10 +862,6 @@ const STARTXREF_SIGNATURE = new Uint8Array([
   0x73, 0x74, 0x61, 0x72, 0x74, 0x78, 0x72, 0x65, 0x66,
 ]);
 const ENDOBJ_SIGNATURE = new Uint8Array([0x65, 0x6e, 0x64, 0x6f, 0x62, 0x6a]);
-
-const FINGERPRINT_FIRST_BYTES = 1024;
-const EMPTY_FINGERPRINT =
-  "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
 
 function find(stream, signature, limit = 1024, backwards = false) {
   if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
@@ -1548,30 +1545,24 @@ class PDFDocument {
   }
 
   get fingerprints() {
+    const FINGERPRINT_FIRST_BYTES = 1024;
+    const EMPTY_FINGERPRINT = "\x00".repeat(16);
+
     function validate(data) {
       return (
         typeof data === "string" &&
-        data.length > 0 &&
+        data.length === 16 &&
         data !== EMPTY_FINGERPRINT
       );
     }
 
-    function hexString(hash) {
-      const buf = [];
-      for (const num of hash) {
-        const hex = num.toString(16);
-        buf.push(hex.padStart(2, "0"));
-      }
-      return buf.join("");
-    }
-
-    const idArray = this.xref.trailer.get("ID");
+    const id = this.xref.trailer.get("ID");
     let hashOriginal, hashModified;
-    if (Array.isArray(idArray) && validate(idArray[0])) {
-      hashOriginal = stringToBytes(idArray[0]);
+    if (Array.isArray(id) && validate(id[0])) {
+      hashOriginal = stringToBytes(id[0]);
 
-      if (idArray[1] !== idArray[0] && validate(idArray[1])) {
-        hashModified = stringToBytes(idArray[1]);
+      if (id[1] !== id[0] && validate(id[1])) {
+        hashModified = stringToBytes(id[1]);
       }
     } else {
       hashOriginal = calculateMD5(
@@ -1582,8 +1573,8 @@ class PDFDocument {
     }
 
     return shadow(this, "fingerprints", [
-      hexString(hashOriginal),
-      hashModified ? hexString(hashModified) : null,
+      toHexUtil(hashOriginal),
+      hashModified ? toHexUtil(hashModified) : null,
     ]);
   }
 
@@ -1871,49 +1862,52 @@ class PDFDocument {
   }
 
   get fieldObjects() {
-    if (!this.formInfo.hasFields) {
-      return shadow(this, "fieldObjects", Promise.resolve(null));
-    }
+    const promise = this.pdfManager
+      .ensureDoc("formInfo")
+      .then(async formInfo => {
+        if (!formInfo.hasFields) {
+          return null;
+        }
 
-    const promise = Promise.all([
-      this.pdfManager.ensureDoc("annotationGlobals"),
-      this.pdfManager.ensureCatalog("acroForm"),
-    ]).then(async ([annotationGlobals, acroForm]) => {
-      if (!annotationGlobals) {
-        return null;
-      }
+        const [annotationGlobals, acroForm] = await Promise.all([
+          this.pdfManager.ensureDoc("annotationGlobals"),
+          this.pdfManager.ensureCatalog("acroForm"),
+        ]);
+        if (!annotationGlobals) {
+          return null;
+        }
 
-      const visitedRefs = new RefSet();
-      const allFields = Object.create(null);
-      const fieldPromises = new Map();
-      const orphanFields = new RefSetCache();
-      for (const fieldRef of await acroForm.getAsync("Fields")) {
-        await this.#collectFieldObjects(
-          "",
-          null,
-          fieldRef,
-          fieldPromises,
-          annotationGlobals,
-          visitedRefs,
-          orphanFields
-        );
-      }
+        const visitedRefs = new RefSet();
+        const allFields = Object.create(null);
+        const fieldPromises = new Map();
+        const orphanFields = new RefSetCache();
+        for (const fieldRef of await acroForm.getAsync("Fields")) {
+          await this.#collectFieldObjects(
+            "",
+            null,
+            fieldRef,
+            fieldPromises,
+            annotationGlobals,
+            visitedRefs,
+            orphanFields
+          );
+        }
 
-      const allPromises = [];
-      for (const [name, promises] of fieldPromises) {
-        allPromises.push(
-          Promise.all(promises).then(fields => {
-            fields = fields.filter(field => !!field);
-            if (fields.length > 0) {
-              allFields[name] = fields;
-            }
-          })
-        );
-      }
+        const allPromises = [];
+        for (const [name, promises] of fieldPromises) {
+          allPromises.push(
+            Promise.all(promises).then(fields => {
+              fields = fields.filter(field => !!field);
+              if (fields.length > 0) {
+                allFields[name] = fields;
+              }
+            })
+          );
+        }
 
-      await Promise.all(allPromises);
-      return { allFields, orphanFields };
-    });
+        await Promise.all(allPromises);
+        return { allFields, orphanFields };
+      });
 
     return shadow(this, "fieldObjects", promise);
   }
@@ -1944,12 +1938,7 @@ class PDFDocument {
   }
 
   get calculationOrderIds() {
-    const acroForm = this.catalog.acroForm;
-    if (!acroForm?.has("CO")) {
-      return shadow(this, "calculationOrderIds", null);
-    }
-
-    const calculationOrder = acroForm.get("CO");
+    const calculationOrder = this.catalog.acroForm?.get("CO");
     if (!Array.isArray(calculationOrder) || calculationOrder.length === 0) {
       return shadow(this, "calculationOrderIds", null);
     }
@@ -1960,10 +1949,7 @@ class PDFDocument {
         ids.push(id.toString());
       }
     }
-    if (ids.length === 0) {
-      return shadow(this, "calculationOrderIds", null);
-    }
-    return shadow(this, "calculationOrderIds", ids);
+    return shadow(this, "calculationOrderIds", ids.length ? ids : null);
   }
 
   get annotationGlobals() {

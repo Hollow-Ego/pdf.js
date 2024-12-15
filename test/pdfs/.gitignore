@@ -2,6 +2,7 @@
 *.error
 
 !boundingBox_invalid.pdf
+!pdkids.pdf
 !tracemonkey.pdf
 !TrueType_without_cmap.pdf
 !franz.pdf
@@ -589,6 +590,7 @@
 !issue15690.pdf
 !bug1802888.pdf
 !issue15759.pdf
+!issue18823.pdf
 !issue15753.pdf
 !issue15789.pdf
 !fields_order.pdf
@@ -675,3 +677,6 @@
 !stamps.pdf
 !issue15096.pdf
 !issue18036.pdf
+!issue18894.pdf
+!bug1922766.pdf
+!issue18956.pdf

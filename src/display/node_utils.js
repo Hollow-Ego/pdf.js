@@ -13,13 +13,11 @@
  * limitations under the License.
  */
 
-import {
-  BaseCanvasFactory,
-  BaseCMapReaderFactory,
-  BaseFilterFactory,
-  BaseStandardFontDataFactory,
-} from "./base_factory.js";
 import { isNodeJS, warn } from "../shared/util.js";
+import { BaseCanvasFactory } from "./canvas_factory.js";
+import { BaseCMapReaderFactory } from "./cmap_reader_factory.js";
+import { BaseFilterFactory } from "./filter_factory.js";
+import { BaseStandardFontDataFactory } from "./standard_fontdata_factory.js";
 
 if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
   throw new Error(
@@ -86,7 +84,11 @@ if (isNodeJS) {
           applyPath2DToCanvasRenderingContext &&
           Path2D
         ) {
-          applyPath2DToCanvasRenderingContext(CanvasRenderingContext2D);
+          try {
+            applyPath2DToCanvasRenderingContext(CanvasRenderingContext2D);
+          } catch (ex) {
+            warn(`applyPath2DToCanvasRenderingContext: "${ex}".`);
+          }
           globalThis.Path2D = Path2D;
         } else {
           warn("Cannot polyfill `Path2D`, rendering may be broken.");
@@ -114,10 +116,11 @@ class NodePackages {
   }
 }
 
-const fetchData = function (url) {
+async function fetchData(url) {
   const fs = NodePackages.get("fs");
-  return fs.promises.readFile(url).then(data => new Uint8Array(data));
-};
+  const data = await fs.promises.readFile(url);
+  return new Uint8Array(data);
+}
 
 class NodeFilterFactory extends BaseFilterFactory {}
 
@@ -135,8 +138,8 @@ class NodeCMapReaderFactory extends BaseCMapReaderFactory {
   /**
    * @ignore
    */
-  _fetchData(url, compressionType) {
-    return fetchData(url).then(data => ({ cMapData: data, compressionType }));
+  async _fetch(url) {
+    return fetchData(url);
   }
 }
 
@@ -144,12 +147,13 @@ class NodeStandardFontDataFactory extends BaseStandardFontDataFactory {
   /**
    * @ignore
    */
-  _fetchData(url) {
+  async _fetch(url) {
     return fetchData(url);
   }
 }
 
 export {
+  fetchData,
   NodeCanvasFactory,
   NodeCMapReaderFactory,
   NodeFilterFactory,

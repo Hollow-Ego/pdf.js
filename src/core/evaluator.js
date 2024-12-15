@@ -17,7 +17,6 @@
 import {
   AbortException,
   assert,
-  CMapCompressionType,
   FONT_IDENTITY_MATRIX,
   FormatError,
   IDENTITY_MATRIX,
@@ -63,7 +62,6 @@ import {
   LocalTilingPatternCache,
   RegionalImageCache,
 } from "./image_utils.js";
-import { NullStream, Stream } from "./stream.js";
 import { BaseStream } from "./base_stream.js";
 import { bidi } from "./bidi.js";
 import { ColorSpace } from "./colorspace.js";
@@ -77,6 +75,7 @@ import { ImageResizer } from "./image_resizer.js";
 import { MurmurHash3_64 } from "../shared/murmurhash3.js";
 import { OperatorList } from "./operator_list.js";
 import { PDFImage } from "./image.js";
+import { Stream } from "./stream.js";
 
 const DefaultPartialEvaluatorOptions = Object.freeze({
   maxImageSize: -1,
@@ -84,6 +83,7 @@ const DefaultPartialEvaluatorOptions = Object.freeze({
   ignoreErrors: false,
   isEvalSupported: true,
   isOffscreenCanvasSupported: false,
+  isChrome: false,
   canvasMaxAreaInBytes: -1,
   fontExtraProperties: false,
   useSystemFonts: true,
@@ -233,7 +233,14 @@ class PartialEvaluator {
 
     this._regionalImageCache = new RegionalImageCache();
     this._fetchBuiltInCMapBound = this.fetchBuiltInCMap.bind(this);
-    ImageResizer.setMaxArea(this.options.canvasMaxAreaInBytes);
+    if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
+      ImageResizer.setMaxArea(this.options.canvasMaxAreaInBytes);
+    } else {
+      ImageResizer.setOptions({
+        isChrome: this.options.isChrome,
+        maxArea: this.options.canvasMaxAreaInBytes,
+      });
+    }
   }
 
   /**
@@ -398,17 +405,15 @@ class PartialEvaluator {
       }
       data = {
         cMapData: new Uint8Array(await response.arrayBuffer()),
-        compressionType: CMapCompressionType.BINARY,
+        isCompressed: true,
       };
     } else {
       // Get the data on the main-thread instead.
       data = await this.handler.sendWithPromise("FetchBuiltInCMap", { name });
     }
+    // Cache the CMap data, to avoid fetching it repeatedly.
+    this.builtInCMapCache.set(name, data);
 
-    if (data.compressionType !== CMapCompressionType.NONE) {
-      // Given the size of uncompressed CMaps, only cache compressed ones.
-      this.builtInCMapCache.set(name, data);
-    }
     return data;
   }
 
@@ -2085,6 +2090,11 @@ class PartialEvaluator {
           case OPS.setFillColorN:
             cs = stateManager.state.patternFillColorSpace;
             if (!cs) {
+              if (isNumberArray(args, null)) {
+                args = ColorSpace.singletons.gray.getRgb(args, 0);
+                fn = OPS.setFillRGBColor;
+                break;
+              }
               args = [];
               fn = OPS.setFillTransparent;
               break;
@@ -2112,6 +2122,11 @@ class PartialEvaluator {
           case OPS.setStrokeColorN:
             cs = stateManager.state.patternStrokeColorSpace;
             if (!cs) {
+              if (isNumberArray(args, null)) {
+                args = ColorSpace.singletons.gray.getRgb(args, 0);
+                fn = OPS.setStrokeRGBColor;
+                break;
+              }
               args = [];
               fn = OPS.setStrokeTransparent;
               break;
@@ -4421,12 +4436,20 @@ class PartialEvaluator {
     let fontFile, subtype, length1, length2, length3;
     try {
       fontFile = descriptor.get("FontFile", "FontFile2", "FontFile3");
+
+      if (fontFile) {
+        if (!(fontFile instanceof BaseStream)) {
+          throw new FormatError("FontFile should be a stream");
+        } else if (fontFile.isEmpty) {
+          throw new FormatError("FontFile is empty");
+        }
+      }
     } catch (ex) {
       if (!this.options.ignoreErrors) {
         throw ex;
       }
       warn(`translateFont - fetching "${fontName.name}" font file: "${ex}".`);
-      fontFile = new NullStream();
+      fontFile = null;
     }
     let isInternalFont = false;
     let glyphScaleFactors = null;

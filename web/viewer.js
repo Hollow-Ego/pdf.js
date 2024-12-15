@@ -318,4 +318,9 @@ const event = new CustomEvent("ngxViewerFileHasBeenLoaded", {
 document.dispatchEvent(event);
 // end of modification by ngx-extended-pdf-viewer
 
-export { PDFViewerApplication, AppConstants as PDFViewerApplicationConstants, AppOptions as PDFViewerApplicationOptions, webViewerLoad };
+export {
+  AppConstants as PDFViewerApplicationConstants,
+  AppOptions as PDFViewerApplicationOptions,
+  PDFViewerApplication,
+  webViewerLoad
+};
