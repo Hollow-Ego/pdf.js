@@ -756,6 +756,12 @@ async function kbFocusPrevious(page) {
   await awaitPromise(handle);
 }
 
+async function kbSave(page) {
+  await page.keyboard.down(modifier);
+  await page.keyboard.press("s");
+  await page.keyboard.up(modifier);
+}
+
 async function switchToEditor(name, page, disable = false) {
   const modeChangedHandle = await createPromise(page, resolve => {
     window.PDFViewerApplication.eventBus.on(
@@ -778,6 +784,28 @@ function waitForNoElement(page, selector) {
     sel => !document.querySelector(sel),
     {},
     selector
+  );
+}
+
+function isCanvasWhite(page, pageNumber, rectangle) {
+  return page.evaluate(
+    (rect, pageN) => {
+      const canvas = document.querySelector(
+        `.page[data-page-number = "${pageN}"] .canvasWrapper canvas`
+      );
+      const canvasRect = canvas.getBoundingClientRect();
+      const ctx = canvas.getContext("2d");
+      rect ||= canvasRect;
+      const { data } = ctx.getImageData(
+        rect.x - canvasRect.x,
+        rect.y - canvasRect.y,
+        rect.width,
+        rect.height
+      );
+      return new Uint32Array(data.buffer).every(x => x === 0xffffffff);
+    },
+    rectangle,
+    pageNumber
   );
 }
 
@@ -806,6 +834,7 @@ export {
   getSerialized,
   getSpanRectFromText,
   hover,
+  isCanvasWhite,
   isVisible,
   kbBigMoveDown,
   kbBigMoveLeft,
@@ -819,6 +848,7 @@ export {
   kbModifierDown,
   kbModifierUp,
   kbRedo,
+  kbSave,
   kbSelectAll,
   kbUndo,
   loadAndWait,

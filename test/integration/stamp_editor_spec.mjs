@@ -40,6 +40,7 @@ import {
   serializeBitmapDimensions,
   switchToEditor,
   waitForAnnotationEditorLayer,
+  waitForAnnotationModeChanged,
   waitForEntryInStorage,
   waitForSelectedEditor,
   waitForSerialized,
@@ -897,6 +898,9 @@ describe("Stamp Editor", () => {
             eventBus.on("annotationeditoruimanager", ({ uiManager }) => {
               window.uiManager = uiManager;
             });
+            eventBus.on("reporttelemetry", ({ details }) => {
+              (window.telemetry ||= []).push(structuredClone(details));
+            });
           },
         },
         {
@@ -917,6 +921,7 @@ describe("Stamp Editor", () => {
         }
         await page.evaluate(() => {
           window.uiManager.reset();
+          window.telemetry = [];
         });
         // Disable editing mode.
         await switchToStamp(page, /* disable */ true);
@@ -953,7 +958,7 @@ describe("Stamp Editor", () => {
         // Check that AI guessed the correct alt text.
         await page.waitForFunction(
           `document.getElementById("newAltTextDescriptionTextarea").value ===
-            "Fake alt text"`
+            "Fake alt text."`
         );
 
         // Check that the dialog has the correct title: "Edit..."
@@ -1182,6 +1187,82 @@ describe("Stamp Editor", () => {
         await page.waitForSelector("#newAltTextDisclaimer[hidden]");
       }
     });
+
+    it("must check that the data in telemetry are correct", async () => {
+      // Run sequentially to avoid clipboard issues.
+      for (const [browserName, page] of pages) {
+        await page.evaluate(() => {
+          window.PDFViewerApplication.mlManager.enableAltTextModelDownload = true;
+        });
+        await switchToStamp(page);
+
+        // Add an image.
+        await copyImage(page, "../images/firefox_logo.png", 0);
+        const editorSelector = getEditorSelector(0);
+        await page.waitForSelector(editorSelector);
+        await waitForSerialized(page, 1);
+
+        // Wait for the dialog to be visible.
+        await page.waitForSelector("#newAltTextDialog", { visible: true });
+
+        // Check that AI guessed the correct alt text.
+        await page.waitForFunction(
+          `document.getElementById("newAltTextDescriptionTextarea").value ===
+                    "Fake alt text."`
+        );
+        // Clear the input and check that the title changes to "Add..."
+        await clearInput(
+          page,
+          "#newAltTextDescriptionTextarea",
+          /* waitForInputEvent = */ true
+        );
+        // Save the empty text.
+        await page.click("#newAltTextSave");
+        await page.waitForSelector("#newAltTextDialog", { visible: false });
+
+        // Get the telemetry data and clean.
+        let telemetry = await page.evaluate(() => {
+          const tel = window.telemetry;
+          window.telemetry = [];
+          return tel;
+        });
+        let saveTelemetry = telemetry.find(
+          details => details.data.action === "pdfjs.image.alt_text.user_edit"
+        );
+        expect(saveTelemetry.data.data)
+          .withContext(`In ${browserName}`)
+          .toEqual({
+            total_words: 3,
+            words_removed: 3,
+            words_added: 0,
+          });
+
+        // Click on the Review button.
+        const buttonSelector = `${editorSelector} button.altText.new`;
+        await page.waitForSelector(buttonSelector, { visible: true });
+        await page.click(buttonSelector);
+        await page.waitForSelector("#newAltTextDialog", { visible: true });
+
+        // Add a new alt text and check that the title changes to "Edit..."
+        await page.type("#newAltTextDescriptionTextarea", "Fake text alt foo.");
+
+        // Save the empty text.
+        await page.click("#newAltTextSave");
+        await page.waitForSelector("#newAltTextDialog", { visible: false });
+
+        telemetry = await page.evaluate(() => window.telemetry);
+        saveTelemetry = telemetry.find(
+          details => details.data.action === "pdfjs.image.alt_text.user_edit"
+        );
+        expect(saveTelemetry.data.data)
+          .withContext(`In ${browserName}`)
+          .toEqual({
+            total_words: 3,
+            words_removed: 0,
+            words_added: 1,
+          });
+      }
+    });
   });
 
   describe("New alt-text flow (bug 1920515)", () => {
@@ -1357,7 +1438,9 @@ describe("Stamp Editor", () => {
     it("must move an annotation", async () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
+          const modeChangedHandle = await waitForAnnotationModeChanged(page);
           await page.click(getAnnotationSelector("25R"), { count: 2 });
+          await awaitPromise(modeChangedHandle);
           await waitForSelectedEditor(page, getEditorSelector(0));
 
           const editorIds = await getEditors(page, "stamp");
@@ -1404,7 +1487,9 @@ describe("Stamp Editor", () => {
     it("must update an existing alt-text", async () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
+          const modeChangedHandle = await waitForAnnotationModeChanged(page);
           await page.click(getAnnotationSelector("58R"), { count: 2 });
+          await awaitPromise(modeChangedHandle);
           await waitForSelectedEditor(page, getEditorSelector(4));
 
           const editorIds = await getEditors(page, "stamp");
@@ -1461,7 +1546,9 @@ describe("Stamp Editor", () => {
     it("must check that the annotation is correctly restored", async () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
+          const modeChangedHandle = await waitForAnnotationModeChanged(page);
           await page.click(getAnnotationSelector("37R"), { count: 2 });
+          await awaitPromise(modeChangedHandle);
           const editorSelector = getEditorSelector(2);
           await waitForSelectedEditor(page, editorSelector);
 
@@ -1528,6 +1615,100 @@ describe("Stamp Editor", () => {
 
         await waitForSelectedEditor(page, editorSelector);
       }
+    });
+  });
+
+  describe("Undo deletion popup has the expected behaviour", () => {
+    let pages;
+    const editorSelector = getEditorSelector(0);
+
+    beforeEach(async () => {
+      pages = await loadAndWait("tracemonkey.pdf", ".annotationEditorLayer");
+    });
+
+    afterEach(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that deleting an image can be undone using the undo button", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToStamp(page);
+          const selector = editorSelector;
+
+          await copyImage(page, "../images/firefox_logo.png", 0);
+          await page.waitForSelector(selector);
+          await waitForSerialized(page, 1);
+
+          await page.waitForSelector(`${selector} button.delete`);
+          await page.click(`${selector} button.delete`);
+          await waitForSerialized(page, 0);
+
+          await page.waitForSelector("#editorUndoBar:not([hidden])");
+
+          await page.click("#editorUndoBarUndoButton");
+          await waitForSerialized(page, 1);
+          await page.waitForSelector(editorSelector);
+          await page.waitForSelector(`${selector} canvas`);
+        })
+      );
+    });
+
+    it("must check that the undo deletion popup displays the correct message", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToStamp(page);
+          const selector = editorSelector;
+
+          await copyImage(page, "../images/firefox_logo.png", 0);
+          await page.waitForSelector(selector);
+          await waitForSerialized(page, 1);
+
+          await page.waitForSelector(`${selector} button.delete`);
+          await page.click(`${selector} button.delete`);
+          await waitForSerialized(page, 0);
+
+          await page.waitForFunction(() => {
+            const messageElement = document.querySelector(
+              "#editorUndoBarMessage"
+            );
+            return messageElement && messageElement.textContent.trim() !== "";
+          });
+          const message = await page.waitForSelector("#editorUndoBarMessage");
+          const messageText = await page.evaluate(
+            el => el.textContent,
+            message
+          );
+          expect(messageText).toContain("Image removed");
+        })
+      );
+    });
+
+    it("must check that the popup disappears when a new image is inserted", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToStamp(page);
+          const selector = editorSelector;
+
+          await copyImage(page, "../images/firefox_logo.png", 0);
+          await page.waitForSelector(selector);
+          await waitForSerialized(page, 1);
+
+          await page.waitForSelector(`${editorSelector} button.delete`);
+          await page.click(`${editorSelector} button.delete`);
+          await waitForSerialized(page, 0);
+
+          await page.waitForSelector("#editorUndoBar:not([hidden])");
+          await page.click("#editorStampAddImage");
+          const newInput = await page.$("#stampEditorFileInput");
+          await newInput.uploadFile(
+            `${path.join(__dirname, "../images/firefox_logo.png")}`
+          );
+          await waitForImage(page, getEditorSelector(1));
+          await waitForSerialized(page, 1);
+          await page.waitForSelector("#editorUndoBar", { hidden: true });
+        })
+      );
     });
   });
 });

@@ -217,6 +217,8 @@ class PDFViewer {
 
   #containerTopLeft = null;
 
+  #editorUndoBar = null;
+
   #enableHWA = false;
 
   #enableHighlightFloatingButton = false;
@@ -307,6 +309,7 @@ class PDFViewer {
     this.findController = options.findController || null;
     this.customFindController = options.customFindController || null;
     this.#altTextManager = options.altTextManager || null;
+    this.#editorUndoBar = options.editorUndoBar || null;
 
     if (this.findController) {
       this.findController.onIsPageVisible = pageNumber =>
@@ -1158,7 +1161,8 @@ class PDFViewer {
               this.#enableHighlightFloatingButton,
               this.#enableUpdatedAddImage,
               this.#enableNewAltTextWhenAddingImage,
-              this.#mlManager
+              this.#mlManager,
+              this.#editorUndoBar
             );
             eventBus.dispatch("annotationeditoruimanager", {
               source: this,

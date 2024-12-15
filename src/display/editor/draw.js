@@ -344,7 +344,9 @@ class DrawingEditor extends AnnotationEditor {
       this.#mustBeCommitted = false;
       this.commit();
       this.parent.setSelected(this);
-      this.div.focus();
+      if (this.isOnScreen) {
+        this.div.focus();
+      }
     }
   }
 
@@ -674,6 +676,7 @@ class DrawingEditor extends AnnotationEditor {
       signal,
     });
     parent.toggleDrawing();
+    uiManager._editorUndoBar?.hide();
 
     if (this._currentDraw) {
       parent.drawLayer.updateProperties(

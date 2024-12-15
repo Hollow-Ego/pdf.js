@@ -42,6 +42,8 @@ const StreamKind = {
   START_COMPLETE: 8,
 };
 
+function onFn() {}
+
 function wrapReason(reason) {
   if (
     !(
@@ -122,9 +124,7 @@ class MessageHandler {
         targetName = data.sourceName,
         comObj = this.comObj;
 
-      new Promise(function (resolve) {
-        resolve(action(data.data));
-      }).then(
+      Promise.try(action, data.data).then(
         function (result) {
           comObj.postMessage({
             sourceName,
@@ -366,9 +366,7 @@ class MessageHandler {
     streamSink.ready = streamSink.sinkCapability.promise;
     this.streamSinks[streamId] = streamSink;
 
-    new Promise(function (resolve) {
-      resolve(action(data.data, streamSink));
-    }).then(
+    Promise.try(action, data.data, streamSink).then(
       function () {
         comObj.postMessage({
           sourceName,
@@ -433,9 +431,7 @@ class MessageHandler {
         // Reset desiredSize property of sink on every pull.
         streamSink.desiredSize = data.desiredSize;
 
-        new Promise(function (resolve) {
-          resolve(streamSink.onPull?.());
-        }).then(
+        Promise.try(streamSink.onPull || onFn).then(
           function () {
             comObj.postMessage({
               sourceName,
@@ -489,10 +485,9 @@ class MessageHandler {
         if (!streamSink) {
           break;
         }
+        const dataReason = wrapReason(data.reason);
 
-        new Promise(function (resolve) {
-          resolve(streamSink.onCancel?.(wrapReason(data.reason)));
-        }).then(
+        Promise.try(streamSink.onCancel || onFn, dataReason).then(
           function () {
             comObj.postMessage({
               sourceName,
@@ -512,7 +507,7 @@ class MessageHandler {
             });
           }
         );
-        streamSink.sinkCapability.reject(wrapReason(data.reason));
+        streamSink.sinkCapability.reject(dataReason);
         streamSink.isCancelled = true;
         delete this.streamSinks[streamId];
         break;
