@@ -54,6 +54,38 @@ import { StampEditor } from "./stamp.js";
  * @property {PageViewport} viewport
  */
 
+
+ class PointerType {
+      static current = null;
+      static editor = null;
+      constructor(t) {
+          if (PointerType.current === null) {
+              PointerType.current = "";
+              window.addEventListener("pointerdown", this.windowPointerDown, !0)
+          }
+      }
+      destroy() {
+          if (PointerType.current !== null) {
+              window.removeEventListener("pointerdown", this.windowPointerDown, !0);
+              PointerType.current = null
+          }
+      }
+      windowPointerDown(t) {
+          PointerType.current = t.pointerType;
+          return !0
+      }
+      static initializeEditor() {
+        setTimeout(() => PointerType.editor = PointerType.current);
+      }
+      static sameAsEditor(pointerType = undefined) {
+        if (pointerType) {
+          return PointerType.editor == pointerType;
+        }
+        return PointerType.editor == PointerType.current;
+      }
+  }
+  new PointerType;
+
 /**
  * Manage all the different editors on a page.
  */
@@ -162,6 +194,7 @@ class AnnotationEditorLayer {
         this.disableClick();
         return;
       case AnnotationEditorType.INK:
+        PointerType.initializeEditor();
         this.disableTextSelection();
         this.togglePointerEvents(true);
         this.enableClick();
@@ -769,7 +802,13 @@ class AnnotationEditorLayer {
   pointerdown(event) {
     if (this.#uiManager.getMode() === AnnotationEditorType.HIGHLIGHT) {
       this.enableTextSelection();
+    } else if (this.#uiManager.getMode() === AnnotationEditorType.INK &&
+               !PointerType.sameAsEditor(event.pointerType)) {
+      // The goal is to ensure that only the right pointer type can start a
+      // drawing session
+      return;
     }
+
     if (this.#hadPointerDown) {
       // It's possible to have a second pointerdown event before a pointerup one
       // when the user puts a finger on a touchscreen and then add a second one
