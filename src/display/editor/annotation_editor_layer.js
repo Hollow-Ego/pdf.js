@@ -194,7 +194,6 @@ class AnnotationEditorLayer {
         this.disableClick();
         return;
       case AnnotationEditorType.INK:
-        PointerType.initializeEditor();
         this.disableTextSelection();
         this.togglePointerEvents(true);
         this.enableClick();
@@ -210,6 +209,7 @@ class AnnotationEditorLayer {
         this.enableClick();
     }
 
+    PointerType.initializeEditor();
     this.toggleAnnotationLayerPointerEvents(false);
     const { classList } = this.div;
     for (const editorType of AnnotationEditorLayer.#editorTypes.values()) {
@@ -801,6 +801,9 @@ class AnnotationEditorLayer {
    */
   pointerdown(event) {
     if (this.#uiManager.getMode() === AnnotationEditorType.HIGHLIGHT) {
+      if (!PointerType.sameAsEditor(event.pointerType)) {
+        return;
+      }
       this.enableTextSelection();
     } else if (this.#uiManager.getMode() === AnnotationEditorType.INK &&
                !PointerType.sameAsEditor(event.pointerType)) {
