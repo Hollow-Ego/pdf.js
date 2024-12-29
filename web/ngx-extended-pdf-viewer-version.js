@@ -1,1 +1,1 @@
-export const ngxExtendedPdfViewerVersion = '22.1.0';
+export const ngxExtendedPdfViewerVersion = '22.2.0-alpha.0';
