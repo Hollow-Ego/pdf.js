@@ -898,6 +898,19 @@ const calcRound =
         return e.style.width === "calc(1320px)" ? Math.fround : x => x;
       })();
 
+// #2593 modified by ngx-extended-pdf-viewer
+function isInsideNgxExtendedPdfViewer(element) {
+  let currentElement = element;
+  while (currentElement) {
+    if (currentElement.tagName.toLowerCase() === 'ngx-extended-pdf-viewer') {
+      return true;
+    }
+    currentElement = currentElement.parentElement;
+  }
+  return false;
+}
+// #2593 end of modification by ngx-extended-pdf-viewer
+
 export {
   animationStarted,
   apiPageLayoutToViewerModes,
@@ -916,6 +929,7 @@ export {
   getActiveOrFocusedElement,
   getPageSizeInches,
   getVisibleElements,
+  isInsideNgxExtendedPdfViewer, // #2593 modified by ngx-extended-pdf-viewer
   isPortraitOrientation,
   isValidRotation,
   isValidScrollMode,

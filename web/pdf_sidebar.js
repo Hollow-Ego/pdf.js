@@ -18,6 +18,7 @@
 
 import {
   docStyle,
+  isInsideNgxExtendedPdfViewer, // #2593 modified by ngx-extended-pdf-viewer
   PresentationModeState,
   SidebarView,
   toggleCheckedBtn,
@@ -341,9 +342,11 @@ class PDFSidebar {
 
     // #2593 modified by ngx-extended-pdf-viewer
     // the toggle button is already handled by the TypeScript code
-    // this.toggleButton.addEventListener("click", evt => {
-    //  this.toggle(evt);
-    // });
+    if (!isInsideNgxExtendedPdfViewer(this.toggleButton)) {
+     this.toggleButton.addEventListener("click", evt => {
+      this.toggle(evt);
+     });
+    }
     // #2593 end of modification by ngx-extended-pdf-viewer
 
     // Buttons for switching views.

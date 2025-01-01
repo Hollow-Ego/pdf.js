@@ -36,6 +36,8 @@ import {
   VerbosityLevel,
 } from "../src/shared/util.js";
 
+import { TouchManager } from "../src/display/touch_manager.js";
+
 import { build, getDocument } from "../src/display/api.js";
 import { getFilenameFromUrl, getPdfFilenameFromUrl, isDataScheme, isPdfFile, noContextMenu, stopEvent } from "../src/display/display_utils.js";
 
@@ -102,6 +104,7 @@ export {
   shadow,
   stopEvent,
   TextLayer,
+  TouchManager,
   UnexpectedResponseException,
   Util,
   VerbosityLevel,

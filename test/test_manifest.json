@@ -2735,6 +2735,13 @@
     "about": "TrueType font with (0, 1) cmap."
   },
   {
+    "id": "issue19176",
+    "file": "pdfs/issue19176.pdf",
+    "md5": "c307418412a72997671518fa978439e0",
+    "rounds": 1,
+    "type": "eq"
+  },
+  {
     "id": "issue4801",
     "file": "pdfs/issue4801.pdf",
     "md5": "7f32764717447a8b5c8eac08c9ab8380",
@@ -5246,6 +5253,13 @@
     "rounds": 1,
     "lastPage": 2,
     "link": true,
+    "type": "eq"
+  },
+  {
+    "id": "issue14200",
+    "file": "pdfs/issue14200.pdf",
+    "md5": "4dba2cde1c6e65abe53e66eefc97a7f1",
+    "rounds": 1,
     "type": "eq"
   },
   {
@@ -11201,5 +11215,29 @@
         "id": "20R"
       }
     }
+  },
+  {
+    "id": "issue19182",
+    "file": "pdfs/issue19182.pdf",
+    "md5": "497370ab55cbb9c60bb0ea4b5d9e4d08",
+    "rounds": 1,
+    "type": "eq"
+  },
+  {
+    "id": "tracemonkey-disableFontFace-eq",
+    "file": "pdfs/tracemonkey.pdf",
+    "md5": "9a192d8b1a7dc652a19835f6f08098bd",
+    "rounds": 1,
+    "disableFontFace": true,
+    "type": "eq"
+  },
+  {
+    "id": "issue19234",
+    "file": "pdfs/issue19234.pdf",
+    "md5": "2b57e3c43fa0ae4a606c13df007c202f",
+    "rounds": 1,
+    "link": true,
+    "disableFontFace": true,
+    "type": "eq"
   }
 ]

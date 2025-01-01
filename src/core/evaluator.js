@@ -175,7 +175,7 @@ function addLocallyCachedImageOps(opList, data) {
   if (data.objId) {
     opList.addDependency(data.objId);
   }
-  opList.addImageOps(data.fn, data.args, data.optionalContent);
+  opList.addImageOps(data.fn, data.args, data.optionalContent, data.hasMask);
 
   if (data.fn === OPS.paintImageMaskXObject && data.args[0]?.count > 0) {
     data.args[0].count++;
@@ -735,13 +735,9 @@ class PartialEvaluator {
     }
 
     const SMALL_IMAGE_DIMENSIONS = 200;
+    const hasMask = dict.has("SMask") || dict.has("Mask");
     // Inlining small images into the queue as RGB data
-    if (
-      isInline &&
-      w + h < SMALL_IMAGE_DIMENSIONS &&
-      !dict.has("SMask") &&
-      !dict.has("Mask")
-    ) {
+    if (isInline && w + h < SMALL_IMAGE_DIMENSIONS && !hasMask) {
       try {
         const imageObj = new PDFImage({
           xref: this.xref,
@@ -798,7 +794,12 @@ class PartialEvaluator {
     // Ensure that the dependency is added before the image is decoded.
     operatorList.addDependency(objId);
     args = [objId, w, h];
-    operatorList.addImageOps(OPS.paintImageXObject, args, optionalContent);
+    operatorList.addImageOps(
+      OPS.paintImageXObject,
+      args,
+      optionalContent,
+      hasMask
+    );
 
     if (cacheGlobally) {
       if (this.globalImageCache.hasDecodeFailed(imageRef)) {
@@ -807,6 +808,7 @@ class PartialEvaluator {
           fn: OPS.paintImageXObject,
           args,
           optionalContent,
+          hasMask,
           byteSize: 0, // Data is `null`, since decoding failed previously.
         });
 
@@ -817,7 +819,7 @@ class PartialEvaluator {
       // For large (at least 500x500) or more complex images that we'll cache
       // globally, check if the image is still cached locally on the main-thread
       // to avoid having to re-parse the image (since that can be slow).
-      if (w * h > 250000 || dict.has("SMask") || dict.has("Mask")) {
+      if (w * h > 250000 || hasMask) {
         const localLength = await this.handler.sendWithPromise("commonobj", [
           objId,
           "CopyLocalImage",
@@ -830,6 +832,7 @@ class PartialEvaluator {
             fn: OPS.paintImageXObject,
             args,
             optionalContent,
+            hasMask,
             byteSize: 0, // Temporary entry, to avoid `setData` returning early.
           });
           this.globalImageCache.addByteSize(imageRef, localLength);
@@ -877,6 +880,7 @@ class PartialEvaluator {
         fn: OPS.paintImageXObject,
         args,
         optionalContent,
+        hasMask,
       };
       localImageCache.set(cacheKey, imageRef, cacheData);
 
@@ -889,6 +893,7 @@ class PartialEvaluator {
             fn: OPS.paintImageXObject,
             args,
             optionalContent,
+            hasMask,
             byteSize: 0, // Temporary entry, note `addByteSize` above.
           });
         }
@@ -1819,7 +1824,8 @@ class PartialEvaluator {
                     operatorList.addImageOps(
                       globalImage.fn,
                       globalImage.args,
-                      globalImage.optionalContent
+                      globalImage.optionalContent,
+                      globalImage.hasMask
                     );
 
                     resolveXObject();

@@ -174,6 +174,7 @@ class WebServer {
       this.#serveFileRange(
         response,
         localURL,
+        url.searchParams,
         fileSize,
         start,
         isNaN(end) ? fileSize : end + 1
@@ -304,7 +305,7 @@ class WebServer {
     stream.pipe(response);
   }
 
-  #serveFileRange(response, fileURL, fileSize, start, end) {
+  #serveFileRange(response, fileURL, searchParams, fileSize, start, end) {
     if (end > fileSize || start > end) {
       response.writeHead(416);
       response.end();
@@ -327,6 +328,16 @@ class WebServer {
       "Content-Range",
       `bytes ${start}-${end - 1}/${fileSize}`
     );
+
+    // Support test in `test/unit/network_spec.js`.
+    switch (searchParams.get("test-network-break-ranges")) {
+      case "missing":
+        response.removeHeader("Content-Range");
+        break;
+      case "invalid":
+        response.setHeader("Content-Range", "bytes abc-def/qwerty");
+        break;
+    }
     response.writeHead(206);
     stream.pipe(response);
   }

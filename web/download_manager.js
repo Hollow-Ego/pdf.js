@@ -105,7 +105,7 @@ class DownloadManager {
         // #1657 end of modification by ngx-extended-pdf-viewer
         return true;
       } catch (ex) {
-        NgxConsole.error(`openOrDownloadData: ${ex}`);
+        NgxConsole.error("openOrDownloadData:", ex);
         // Release the `blobUrl`, since opening it failed, and fallback to
         // downloading the PDF file.
         URL.revokeObjectURL(blobUrl);

@@ -14,7 +14,7 @@
  */
 
 import { FindState } from "./pdf_find_controller.js";
-import { toggleExpandedBtn } from "./ui_utils.js";
+import { isInsideNgxExtendedPdfViewer, toggleExpandedBtn } from "./ui_utils.js"; // #2593 modified by ngx-extended-pdf-viewer
 
 const MATCHES_COUNT_LIMIT = 1000;
 
@@ -51,22 +51,39 @@ class PDFFindBar {
     this.eventBus = eventBus;
     this.#mainContainer = mainContainer;
 
+    const checkedInputs = new Map(
+      Array.from([
+        [this.highlightAll, "highlightallchange"],
+        [this.caseSensitive, "casesensitivitychange"],
+        [this.entireWord, "entirewordchange"],
+        [this.matchDiacritics, "diacriticmatchingchange"],
+        [this.findMultipleCheckbox, "findmultiplechange"],  // #2509 modified by ngx-extended-pdf-viewer
+      ]).filter(([elem]) => elem && elem instanceof Element)
+    ) // #2509 modified by ngx-extended-pdf-viewer - only consider existing fields
+
     // Add event listeners to the DOM elements.
     // #2593 modified by ngx-extended-pdf-viewer
-    // this.toggleButton.addEventListener("click", () => {
-    //  this.toggle();
-    // });
+    if (this.toggleButton) {
+      if (!isInsideNgxExtendedPdfViewer(this.toggleButton)) {
+        this.toggleButton.addEventListener("click", () => {
+          this.toggle();
+        });
+      }
+    }
     // #2593 end of modification by ngx-extended-pdf-viewer
 
     this.findField.addEventListener("input", () => {
       this.dispatchEvent("");
     });
 
-    this.bar.addEventListener("keydown", e => {
-      switch (e.keyCode) {
+    this.bar.addEventListener("keydown", ({ keyCode, shiftKey, target }) => {
+      switch (keyCode) {
         case 13: // Enter
-          if (e.target === this.findField) {
-            this.dispatchEvent("again", e.shiftKey);
+          if (target === this.findField) {
+            this.dispatchEvent("again", shiftKey);
+          } else if (checkedInputs.has(target)) {
+            target.checked = !target.checked;
+            this.dispatchEvent(/* evtName = */ checkedInputs.get(target));
           }
           break;
         case 27: // Escape
@@ -78,24 +95,17 @@ class PDFFindBar {
     this.findPreviousButton.addEventListener("click", () => {
       this.dispatchEvent("again", true);
     });
-
     this.findNextButton.addEventListener("click", () => {
       this.dispatchEvent("again", false);
     });
 
-    this.highlightAll.addEventListener("click", () => {
-      this.dispatchEvent("highlightallchange");
-    });
-
-    this.caseSensitive.addEventListener("click", () => {
-      this.dispatchEvent("casesensitivitychange");
-    });
+    for (const [elem, evtName] of checkedInputs) {
+      elem.addEventListener("click", () => {
+        this.dispatchEvent(evtName);
+      });
+    }
 
     // #2509 modified by ngx-extended-pdf-viewer
-    this.findMultipleCheckbox?.addEventListener("click", () => {
-      this.dispatchEvent("findmultiplechange");
-    });
-
     this.matchRegExpCheckbox?.addEventListener("click", () => {
       if (this.matchRegExpCheckbox.checked) {
         this.findMultipleCheckbox.checked = false;
@@ -112,14 +122,6 @@ class PDFFindBar {
       this.dispatchEvent("findregexpchange");
     });
     // #2509 end of modification by ngx-extended-pdf-viewer
-
-    this.entireWord.addEventListener("click", () => {
-      this.dispatchEvent("entirewordchange");
-    });
-
-    this.matchDiacritics?.addEventListener("click", () => {
-      this.dispatchEvent("diacriticmatchingchange");
-    });
   }
 
   reset() {

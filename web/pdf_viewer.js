@@ -129,6 +129,8 @@ function isValidAnnotationEditorMode(mode) {
  *   mode.
  * @property {boolean} [enableHWA] - Enables hardware acceleration for
  *   rendering. The default value is `false`.
+ * @property {boolean} [supportsPinchToZoom] - Enable zooming on pinch gesture.
+ *   The default value is `true`.
  */
 
 class PDFPageViewBuffer {
@@ -251,6 +253,8 @@ class PDFViewer {
 
   #scaleTimeoutId = null;
 
+  #supportsPinchToZoom = true;
+
   #textLayerMode = TextLayerMode.ENABLE;
 
   // #1989 modified by ngx-extended-pdf-viewer
@@ -342,6 +346,7 @@ class PDFViewer {
     this.pageColors = options.pageColors || null;
     this.#mlManager = options.mlManager || null;
     this.#enableHWA = options.enableHWA || false;
+    this.#supportsPinchToZoom = options.supportsPinchToZoom !== false;
 
     this.defaultRenderingQueue = !options.renderingQueue;
     if (
@@ -1162,7 +1167,8 @@ class PDFViewer {
               this.#enableUpdatedAddImage,
               this.#enableNewAltTextWhenAddingImage,
               this.#mlManager,
-              this.#editorUndoBar
+              this.#editorUndoBar,
+              this.#supportsPinchToZoom
             );
             eventBus.dispatch("annotationeditoruimanager", {
               source: this,

@@ -24,17 +24,12 @@ import {
   FeatureTest,
   getVerbosityLevel,
   info,
-  InvalidPDFException,
   isNodeJS,
   MAX_IMAGE_SIZE_TO_CACHE,
-  MissingPDFException,
-  PasswordException,
   RenderingIntentFlag,
   setVerbosityLevel,
   shadow,
   stringToBytes,
-  UnexpectedResponseException,
-  UnknownErrorException,
   unreachable,
   warn,
 } from "../shared/util.js";
@@ -43,15 +38,15 @@ import {
   PrintAnnotationStorage,
   SerializableEmpty,
 } from "./annotation_storage.js";
+import { FontFaceObject, FontLoader } from "./font_loader.js";
 import {
-  deprecated,
   isDataScheme,
   isValidFetchUrl,
   PageViewport,
   RenderingCancelledException,
   StatTimer,
 } from "./display_utils.js";
-import { FontFaceObject, FontLoader } from "./font_loader.js";
+import { MessageHandler, wrapReason } from "../shared/message_handler.js";
 import {
   NodeCanvasFactory,
   NodeCMapReaderFactory,
@@ -64,7 +59,6 @@ import { DOMCMapReaderFactory } from "display-cmap_reader_factory";
 import { DOMFilterFactory } from "./filter_factory.js";
 import { DOMStandardFontDataFactory } from "display-standard_fontdata_factory";
 import { GlobalWorkerOptions } from "./worker_options.js";
-import { MessageHandler } from "../shared/message_handler.js";
 import { Metadata } from "./metadata.js";
 import { OptionalContentConfig } from "./optional_content_config.js";
 import { PDFDataTransportStream } from "./transport_stream.js";
@@ -347,19 +341,6 @@ function getDocument(src = {}) {
           standardFontDataUrl &&
           isValidFetchUrl(cMapUrl, document.baseURI) &&
           isValidFetchUrl(standardFontDataUrl, document.baseURI));
-
-  if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
-    if (src.canvasFactory) {
-      deprecated(
-        "`canvasFactory`-instance option, please use `CanvasFactory` instead."
-      );
-    }
-    if (src.filterFactory) {
-      deprecated(
-        "`filterFactory`-instance option, please use `FilterFactory` instead."
-      );
-    }
-  }
 
   // Parameters only intended for development/testing purposes.
   const styleElement =
@@ -1425,6 +1406,7 @@ class PDFPageProxy {
   } = {}) {
     return new PageViewport({
       viewBox: this.view,
+      userUnit: this.userUnit,
       scale,
       rotation,
       offsetX,
@@ -2762,34 +2744,18 @@ class WorkerTransport {
       loadingTask._capability.resolve(new PDFDocumentProxy(pdfInfo, this));
     });
 
-    messageHandler.on("DocException", function (ex) {
-      let reason;
-      switch (ex.name) {
-        case "PasswordException":
-          reason = new PasswordException(ex.message, ex.code);
-          break;
-        case "InvalidPDFException":
-          reason = new InvalidPDFException(ex.message);
-          break;
-        case "MissingPDFException":
-          reason = new MissingPDFException(ex.message);
-          break;
-        case "UnexpectedResponseException":
-          reason = new UnexpectedResponseException(ex.message, ex.status);
-          break;
-        case "UnknownErrorException":
-          reason = new UnknownErrorException(ex.message, ex.details);
-          break;
-        default:
-          unreachable("DocException - expected a valid Error.");
-      }
-      loadingTask._capability.reject(reason);
+    messageHandler.on("DocException", ex => {
+      loadingTask._capability.reject(wrapReason(ex));
     });
 
-    messageHandler.on("PasswordRequest", exception => {
+    messageHandler.on("PasswordRequest", ex => {
       this.#passwordCapability = Promise.withResolvers();
 
-      if (loadingTask.onPassword) {
+      try {
+        if (!loadingTask.onPassword) {
+          throw wrapReason(ex);
+        }
+
         const updatePassword = password => {
           if (password instanceof Error) {
             this.#passwordCapability.reject(password);
@@ -2797,15 +2763,9 @@ class WorkerTransport {
             this.#passwordCapability.resolve({ password });
           }
         };
-        try {
-          loadingTask.onPassword(updatePassword, exception.code);
-        } catch (ex) {
-          this.#passwordCapability.reject(ex);
-        }
-      } else {
-        this.#passwordCapability.reject(
-          new PasswordException(exception.message, exception.code)
-        );
+        loadingTask.onPassword(updatePassword, ex.code);
+      } catch (err) {
+        this.#passwordCapability.reject(err);
       }
       return this.#passwordCapability.promise;
     });
@@ -2856,6 +2816,7 @@ class WorkerTransport {
               : null;
           const font = new FontFaceObject(exportedData, {
             disableFontFace,
+            fontExtraProperties,
             inspectFont,
           });
 
@@ -3257,6 +3218,20 @@ class PDFObjects {
   has(objId) {
     const obj = this.#objs[objId];
     return !!obj && obj.data !== INITIAL_DATA;
+  }
+
+  /**
+   * @param {string} objId
+   * @returns {boolean}
+   */
+  delete(objId) {
+    const obj = this.#objs[objId];
+    if (!obj || obj.data === INITIAL_DATA) {
+      // Only allow removing the object *after* it's been resolved.
+      return false;
+    }
+    delete this.#objs[objId];
+    return true;
   }
 
   /**

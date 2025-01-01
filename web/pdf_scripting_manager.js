@@ -106,7 +106,7 @@ class PDFScriptingManager {
     try {
       this.#scripting = this.#initScripting();
     } catch (error) {
-      NgxConsole.error(`setDocument: "${error.message}".`);
+      NgxConsole.error("setDocument:", error);
 
       await this.#destroyScripting();
       return;
@@ -193,7 +193,7 @@ class PDFScriptingManager {
 
       eventBus.dispatch("sandboxcreated", { source: this });
     } catch (error) {
-      NgxConsole.error(`setDocument: "${error.message}".`);
+      NgxConsole.error("setDocument:", error);
 
       await this.#destroyScripting();
       return;
