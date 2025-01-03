@@ -786,6 +786,11 @@ appConfig: null,
       // Enable dragging-and-dropping a new PDF file onto the viewerContainer.
       appConfig.mainContainer.addEventListener("dragover", function (evt) {
         if (AppOptions.get("enableDragAndDrop")) { // #686 modified by ngx-extended-pdf-viewer
+          // #2698 modified by ngx-extended-pdf-viewer
+          if (!evt.dataTransfer?.items) {
+            return;
+          }
+          // #2698 end of modification by ngx-extended-pdf-viewer
           for (const item of evt.dataTransfer.items) {
             if (item.type === "application/pdf") {
               evt.dataTransfer.dropEffect =
@@ -798,7 +803,10 @@ appConfig: null,
       });
       appConfig.mainContainer.addEventListener("drop", function (evt) {
         if (AppOptions.get("enableDragAndDrop")) { // #686 modified by ngx-extended-pdf-viewer
-            if (evt.dataTransfer.files?.[0].type !== "application/pdf") {
+          // #2698 modified by ngx-extended-pdf-viewer
+          const files = evt.dataTransfer?.files;
+          if (!files || files.length === 0 || files[0].type !== "application/pdf") {
+          // #2698 end of modification by ngx-extended-pdf-viewer
             return;
           }
           stopEvent(evt);
